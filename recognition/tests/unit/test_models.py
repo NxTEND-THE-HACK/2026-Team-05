@@ -22,3 +22,16 @@ def test_detection_event_payload_matches_go_contract() -> None:
         "confidence": 0.93,
         "detected_at": "2026-08-04T06:00:00+00:00",
     }
+
+
+def test_detection_event_rejects_invalid_confidence() -> None:
+    try:
+        DetectionEvent.create(
+            camera_id="camera-1",
+            motion_code="MOTION_A",
+            confidence=1.1,
+        )
+    except ValueError as exc:
+        assert "confidence" in str(exc)
+    else:
+        raise AssertionError("invalid confidence should fail")
