@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from collections.abc import Mapping
 from uuid import UUID, uuid4
 
 
@@ -14,6 +15,36 @@ class CapturedFrame:
     data: bytes
     captured_at: datetime
     sequence: int
+
+
+@dataclass(frozen=True, slots=True)
+class Landmark:
+    """A normalized MediaPipe landmark."""
+
+    x: float
+    y: float
+    z: float = 0.0
+    visibility: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class HandObservation:
+    """One detected hand and its 21 indexed landmarks."""
+
+    handedness: str
+    landmarks: tuple[Landmark, ...]
+
+    def point(self, index: int) -> Landmark:
+        return self.landmarks[index]
+
+
+@dataclass(frozen=True, slots=True)
+class LandmarkFrame:
+    """Pose and hand landmarks detected in one camera frame."""
+
+    captured_at: datetime
+    pose: Mapping[str, Landmark]
+    hands: tuple[HandObservation, ...]
 
 
 @dataclass(frozen=True, slots=True)
