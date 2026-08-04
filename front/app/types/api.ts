@@ -40,7 +40,7 @@ export interface Action {
   applianceId: string;
   name: string;
   providerType: ActionProviderType;
-  /** 呼び出しパラメータ（プロバイダに依存） */
+  /** 暫定。providerごとの仕様確定後に具体化する */
   params: Record<string, unknown>;
 }
 
@@ -65,7 +65,8 @@ export interface ActionLog {
   cameraName?: string;
   motionCode: string;
   motionName?: string;
-  actionId: string;
+  /** 紐付け解決前エラー時は存在しないため optional */
+  actionId?: string;
   actionName?: string;
   status: ActionLogStatus;
   errorMessage?: string;
