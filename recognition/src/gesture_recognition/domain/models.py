@@ -8,6 +8,15 @@ from uuid import UUID, uuid4
 
 
 @dataclass(frozen=True, slots=True)
+class CapturedFrame:
+    """One in-memory JPEG frame read from a camera source."""
+
+    data: bytes
+    captured_at: datetime
+    sequence: int
+
+
+@dataclass(frozen=True, slots=True)
 class DetectionEvent:
     """A recognized motion sent from Python to the Go backend."""
 
