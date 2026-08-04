@@ -57,6 +57,14 @@ class DetectionEvent:
     detected_at: datetime
     event_id: UUID
 
+    def __post_init__(self) -> None:
+        if not self.camera_id.strip():
+            raise ValueError("camera_id must not be empty")
+        if not self.motion_code.strip():
+            raise ValueError("motion_code must not be empty")
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence must be between 0 and 1")
+
     @classmethod
     def create(
         cls,

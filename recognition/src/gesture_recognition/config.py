@@ -21,6 +21,7 @@ class Settings:
     reconnect_max_seconds: float = 30.0
     detection_send_retries: int = 3
     detection_send_timeout_seconds: float = 3.0
+    frame_poll_interval_seconds: float = 0.01
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -44,6 +45,9 @@ class Settings:
         timeout = _positive_float(
             values, "DETECTION_SEND_TIMEOUT_SECONDS", 3.0
         )
+        poll_interval = _positive_float(
+            values, "FRAME_POLL_INTERVAL_SECONDS", 0.01
+        )
 
         return cls(
             camera_id=camera_id,
@@ -54,6 +58,7 @@ class Settings:
             reconnect_max_seconds=maximum,
             detection_send_retries=retries,
             detection_send_timeout_seconds=timeout,
+            frame_poll_interval_seconds=poll_interval,
         )
 
 
