@@ -49,15 +49,23 @@ MJPEG URL -> latest-frame buffer -> MediaPipe Pose + Hands
           -> fixed gesture rules -> POST /internal/detections
 ```
 
-The provisional fixed motion codes are:
+The fixed recognition codes are:
 
-- `POSE_RIGHT_HAND_UP`: right wrist held above the right shoulder for 0.6 s
-- `MOTION_SWIPE_RIGHT`: right wrist moves right by 0.18 normalized coordinates
+- `POSE_RIGHT_HAND_UP`: right wrist held above the right shoulder for 0.45 s
+- `POSE_LEFT_HAND_UP`: left wrist held above the left shoulder for 0.45 s
+- `MOTION_SWIPE_RIGHT`: right wrist moves right by 0.12 normalized coordinates
+- `MOTION_SWIPE_LEFT`: left wrist moves left by 0.12 normalized coordinates
 - `MOTION_FINGER_SNAP`: right-hand curled preparation to extended index and
-  partially extended thumb
+  partially extended thumb, using relaxed angle thresholds
+- `MOTION_THUMBS_UP_MOVE_UP`: right-hand thumbs-up pose followed by upward movement
+- `MOTION_THUMBS_DOWN_MOVE_DOWN`: right-hand thumbs-down pose followed by downward movement
+- `MOTION_CLAP`: both hands move from apart to a close palm-to-palm position
+- `MOTION_OPEN_TO_FIST_DOWN`: right hand changes from an open palm to a fist while lowering
 
-The rules combine Pose and Hands detections. A static pose is latched after
-one event until the user returns to the release posture.
+The rules combine Pose and Hands detections. The thumb poses are only start
+states; holding a thumbs-up or thumbs-down pose by itself does not emit an
+event. Each motion is latched after one event until its release condition is
+observed.
 
 ## Run locally
 
