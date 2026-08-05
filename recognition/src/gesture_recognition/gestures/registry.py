@@ -4,11 +4,31 @@ from __future__ import annotations
 
 from .base import GestureRule
 from .engine import GestureEngine
-from .rules import FingerSnapRule, RightHandRaisedRule, SwipeRightRule
+from .rules import (
+    ClapRule,
+    FingerSnapRule,
+    LeftHandRaisedRule,
+    OpenToFistDownRule,
+    RightHandRaisedRule,
+    SwipeLeftRule,
+    SwipeRightRule,
+    ThumbsDownMoveDownRule,
+    ThumbsUpMoveUpRule,
+)
 
 
 def default_rules() -> tuple[GestureRule, ...]:
-    return (RightHandRaisedRule(), SwipeRightRule(), FingerSnapRule())
+    return (
+        RightHandRaisedRule(),
+        LeftHandRaisedRule(),
+        SwipeRightRule(),
+        SwipeLeftRule(),
+        FingerSnapRule(),
+        ThumbsUpMoveUpRule(),
+        ThumbsDownMoveDownRule(),
+        ClapRule(),
+        OpenToFistDownRule(),
+    )
 
 
 def default_engine() -> GestureEngine:
