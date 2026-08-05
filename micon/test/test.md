@@ -5,7 +5,8 @@
 1. `micon/include/config.h.example` を `micon/include/config.h` にコピーする。
 2. `WIFI_SSID`、`WIFI_PASSWORD` を設定する。
 3. 1台目は `CAMERA_ID` を `demo-camera-1`、2台目は `demo-camera-2` にする。
-4. XIAO ESP32S3 Sense にカメラ拡張ボードとアンテナを取り付ける。
+4. 固定IPを使う場合は `CAMERA_USE_STATIC_IP=1` とし、2台で異なるIPを設定する。DHCP範囲との重複がないことを確認する。
+5. XIAO ESP32S3 Sense にカメラ拡張ボードとアンテナを取り付ける。
 
 ### 書き込み
 
@@ -30,5 +31,6 @@ curl.exe http://CAMERA_IP/snapshot --output snapshot.jpg
 
 - Wi-Fiを一度切断し、5秒間隔で再接続を試みること。
 - `/health` の `camera_id` が2台で異なること。
+- 固定IPを有効にした場合、シリアルログのIPが設定値と一致すること。
 - Pythonワーカーを切断しても、カメラがリセットせず待機すること。
 - 映像ファイルがSDカードやフラッシュへ保存されていないこと。

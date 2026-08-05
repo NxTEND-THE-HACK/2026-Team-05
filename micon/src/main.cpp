@@ -40,6 +40,30 @@
 #define CAMERA_JPEG_QUALITY 8
 #endif
 
+#ifndef CAMERA_USE_STATIC_IP
+#define CAMERA_USE_STATIC_IP 0
+#endif
+
+#ifndef CAMERA_STATIC_IP
+#define CAMERA_STATIC_IP ""
+#endif
+
+#ifndef CAMERA_GATEWAY
+#define CAMERA_GATEWAY ""
+#endif
+
+#ifndef CAMERA_SUBNET
+#define CAMERA_SUBNET ""
+#endif
+
+#ifndef CAMERA_PRIMARY_DNS
+#define CAMERA_PRIMARY_DNS ""
+#endif
+
+#ifndef CAMERA_SECONDARY_DNS
+#define CAMERA_SECONDARY_DNS ""
+#endif
+
 namespace {
 
 constexpr uint32_t SERIAL_BAUD_RATE = 115200;
@@ -340,6 +364,36 @@ void beginWifiConnection() {
 
   Serial.printf("Connecting to Wi-Fi: %s\n", WIFI_SSID);
   WiFi.disconnect(false, false);
+
+#if CAMERA_USE_STATIC_IP
+  IPAddress local_ip;
+  IPAddress gateway;
+  IPAddress subnet;
+  IPAddress primary_dns;
+  IPAddress secondary_dns;
+  const bool valid_static_ip =
+      local_ip.fromString(CAMERA_STATIC_IP) &&
+      gateway.fromString(CAMERA_GATEWAY) &&
+      subnet.fromString(CAMERA_SUBNET) &&
+      primary_dns.fromString(CAMERA_PRIMARY_DNS) &&
+      secondary_dns.fromString(CAMERA_SECONDARY_DNS);
+
+  if (!valid_static_ip) {
+    Serial.println("Invalid static Wi-Fi configuration; retrying");
+    next_wifi_attempt_at = millis() + WIFI_RECONNECT_INTERVAL_MS;
+    return;
+  }
+
+  if (!WiFi.config(local_ip, gateway, subnet, primary_dns, secondary_dns)) {
+    Serial.println("Static Wi-Fi configuration failed; retrying");
+    next_wifi_attempt_at = millis() + WIFI_RECONNECT_INTERVAL_MS;
+    return;
+  }
+
+  Serial.printf("Using static Wi-Fi IP: %s\n",
+                local_ip.toString().c_str());
+#endif
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   next_wifi_attempt_at = millis() + WIFI_RECONNECT_INTERVAL_MS;
 }

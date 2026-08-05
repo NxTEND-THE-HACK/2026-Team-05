@@ -29,6 +29,12 @@ Copy-Item include/config.h.example include/config.h
 
 `include/config.h` を編集し、Wi-Fi情報とカメラごとの `CAMERA_ID` を設定します。2台目は `demo-camera-2` など別のIDにしてください。
 
+固定IPをデバイス側で使う場合は、`CAMERA_USE_STATIC_IP` を `1` にし、
+`CAMERA_STATIC_IP`、`CAMERA_GATEWAY`、`CAMERA_SUBNET`、DNSを設定します。
+2台の固定IPは重複させず、ルーターのDHCP割り当て範囲外から選んでください。
+設定例では1台目を `192.168.10.105`、2台目を `192.168.10.106` にしています。
+固定IP設定に失敗した場合、シリアルログにエラーを出してWi-Fi接続を再試行します。
+
 ```powershell
 pio run
 pio run -t upload
