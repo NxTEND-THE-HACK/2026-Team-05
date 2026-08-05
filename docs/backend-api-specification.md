@@ -179,6 +179,12 @@ GET /api/motions
       "code": "MOTION_SWIPE_RIGHT",
       "name": "右スワイプ",
       "description": "右手を右方向へスワイプ"
+    },
+    {
+      "id": "motion-finger-snap",
+      "code": "MOTION_FINGER_SNAP",
+      "name": "指パッチン",
+      "description": "右手を曲げた準備姿勢から人差し指を伸ばす"
     }
   ]
 }
@@ -592,7 +598,6 @@ GET /healthz
 - `TUYA_DRY_RUN=true` の場合、APIは成功するが実機操作は行わない
 - 実機操作ではTuya Device IDと電源DPコードが正しい必要がある
 - 現在の初期データにはプラグA〜Cのオン・オフアクションがあるが、モーションとの初期紐付けはない
-<<<<<<< HEAD
 
 ## 11. 仮フロントでの試用
 
@@ -611,5 +616,3 @@ VITE_API_BASE_URL=http://localhost:8080
 ```
 
 仮画面では、モーション紐付け、Tuyaアクションの手動実行、操作ログ確認ができる。
-=======
->>>>>>> origin/develop
