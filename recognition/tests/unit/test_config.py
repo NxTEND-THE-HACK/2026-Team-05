@@ -16,6 +16,8 @@ def test_settings_load_required_values() -> None:
     assert settings.camera_source == "http://camera/stream"
     assert settings.go_api_url == "http://go/internal/detections"
     assert settings.reconnect_initial_seconds == 1.0
+    assert settings.pose_model_path == "models/pose_landmarker_full.task"
+    assert settings.hand_model_path == "models/hand_landmarker.task"
 
 
 def test_settings_reject_missing_camera_id() -> None:

@@ -22,6 +22,8 @@ class Settings:
     detection_send_retries: int = 3
     detection_send_timeout_seconds: float = 3.0
     frame_poll_interval_seconds: float = 0.01
+    pose_model_path: str = "models/pose_landmarker_full.task"
+    hand_model_path: str = "models/hand_landmarker.task"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -48,6 +50,12 @@ class Settings:
         poll_interval = _positive_float(
             values, "FRAME_POLL_INTERVAL_SECONDS", 0.01
         )
+        pose_model_path = _required_or_default(
+            values, "POSE_MODEL_PATH", "models/pose_landmarker_full.task"
+        )
+        hand_model_path = _required_or_default(
+            values, "HAND_MODEL_PATH", "models/hand_landmarker.task"
+        )
 
         return cls(
             camera_id=camera_id,
@@ -59,6 +67,8 @@ class Settings:
             detection_send_retries=retries,
             detection_send_timeout_seconds=timeout,
             frame_poll_interval_seconds=poll_interval,
+            pose_model_path=pose_model_path,
+            hand_model_path=hand_model_path,
         )
 
 
@@ -66,6 +76,15 @@ def _required(values: Mapping[str, str], key: str) -> str:
     value = values.get(key, "").strip()
     if not value:
         raise ConfigurationError(f"{key} is required")
+    return value
+
+
+def _required_or_default(
+    values: Mapping[str, str], key: str, default: str
+) -> str:
+    value = values.get(key, default).strip()
+    if not value:
+        raise ConfigurationError(f"{key} must not be empty")
     return value
 
 

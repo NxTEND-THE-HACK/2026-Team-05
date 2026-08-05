@@ -30,7 +30,10 @@ def main() -> None:
     worker = RecognitionWorker(
         camera_id=settings.camera_id,
         source=source,
-        detector=MediaPipeDetector(),
+        detector=MediaPipeDetector(
+            pose_model_path=settings.pose_model_path,
+            hand_model_path=settings.hand_model_path,
+        ),
         engine=default_engine(),
         client=GoApiClient(
             settings.go_api_url,
