@@ -126,6 +126,95 @@ class SwipeRightRule:
         self._latched = False
 
 
+@dataclass(slots=True)
+class FingerSnapRule:
+    """Detect a right-hand snap-like transition from curled to extended fingers.
+
+    The camera cannot reliably hear a snap. This visual rule uses the
+    supplied gesture description: the index finger becomes extended while the
+    thumb is partially extended and the other fingers remain curled.
+    """
+
+    motion_code: str = "MOTION_FINGER_SNAP"
+    extended_index_angle: float = 155.0
+    extended_thumb_angle: float = 115.0
+    curled_finger_angle: float = 145.0
+    thumb_middle_contact_ratio: float = 1.2
+
+    _armed: bool = False
+    _latched: bool = False
+
+    def update(self, frame: LandmarkFrame) -> GestureDetection | None:
+        hand = _hand(frame, "Right")
+        if hand is None or len(hand.landmarks) < 21:
+            return None
+
+        ready = self._is_ready(hand)
+        post_snap = self._is_post_snap(hand)
+
+        if self._latched:
+            if not post_snap:
+                self._latched = False
+                self._armed = ready
+            return None
+
+        if ready:
+            self._armed = True
+            return None
+
+        if self._armed and post_snap:
+            self._latched = True
+            self._armed = False
+            return GestureDetection(self.motion_code, self._confidence(hand))
+
+        return None
+
+    def reset(self) -> None:
+        self._armed = False
+        self._latched = False
+
+    def _is_ready(self, hand: HandObservation) -> bool:
+        return (
+            not self._index_extended(hand)
+            and self._other_fingers_curled(hand)
+            and self._thumb_middle_distance(hand) <= self.thumb_middle_contact_ratio
+        )
+
+    def _is_post_snap(self, hand: HandObservation) -> bool:
+        return (
+            self._index_extended(hand)
+            and self._thumb_extended(hand)
+            and self._other_fingers_curled(hand)
+        )
+
+    def _index_extended(self, hand: HandObservation) -> bool:
+        return _joint_angle(hand, 5, 6, 8) >= self.extended_index_angle
+
+    def _thumb_extended(self, hand: HandObservation) -> bool:
+        return _joint_angle(hand, 2, 3, 4) >= self.extended_thumb_angle
+
+    def _other_fingers_curled(self, hand: HandObservation) -> bool:
+        return all(
+            _joint_angle(hand, mcp, pip, tip) <= self.curled_finger_angle
+            for mcp, pip, tip in ((9, 10, 12), (13, 14, 16), (17, 18, 20))
+        )
+
+    def _thumb_middle_distance(self, hand: HandObservation) -> float:
+        palm_size = max(landmark_distance(hand.point(0), hand.point(9)), 0.001)
+        return landmark_distance(hand.point(4), hand.point(12)) / palm_size
+
+    def _confidence(self, hand: HandObservation) -> float:
+        index_margin = _joint_angle(hand, 5, 6, 8) / 180.0
+        thumb_margin = _joint_angle(hand, 2, 3, 4) / 180.0
+        return min(1.0, max(0.0, (index_margin + thumb_margin) / 2.0))
+
+
+def _joint_angle(
+    hand: HandObservation, first: int, middle: int, last: int
+) -> float:
+    return _angle(hand.point(first), hand.point(middle), hand.point(last))
+
+
 def landmark_distance(first: Landmark, last: Landmark) -> float:
     """Return normalized 2D distance for future rule implementations."""
 

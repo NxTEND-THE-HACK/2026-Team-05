@@ -53,6 +53,8 @@ The provisional fixed motion codes are:
 
 - `POSE_RIGHT_HAND_UP`: right wrist held above the right shoulder for 0.6 s
 - `MOTION_SWIPE_RIGHT`: right wrist moves right by 0.18 normalized coordinates
+- `MOTION_FINGER_SNAP`: right-hand curled preparation to extended index and
+  partially extended thumb
 
 The rules combine Pose and Hands detections. A static pose is latched after
 one event until the user returns to the release posture.
