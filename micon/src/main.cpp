@@ -189,10 +189,15 @@ esp_err_t streamHandler(httpd_req_t *request) {
     }
 
     if (result == ESP_OK) {
-      const int header_length = snprintf(part_header, sizeof(part_header),
-                                          STREAM_PART,
-                                          static_cast<unsigned>(jpeg_length));
-      result = httpd_resp_send_chunk(request, part_header, header_length);
+      const int header_length =
+          snprintf(part_header, sizeof(part_header), STREAM_PART,
+                   static_cast<unsigned>(jpeg_length));
+      if (header_length < 0 ||
+          header_length >= static_cast<int>(sizeof(part_header))) {
+        result = ESP_FAIL;
+      } else {
+        result = httpd_resp_send_chunk(request, part_header, header_length);
+      }
     }
 
     if (result == ESP_OK) {
@@ -321,7 +326,7 @@ bool initCamera() {
     sensor->set_saturation(sensor, -2);
   }
 
-  Serial.printf("Camera ready: %ux%u, PSRAM=%s\n",
+  Serial.printf("Camera ready: frame_size=%u, jpeg_quality=%u, PSRAM=%s\n",
                 static_cast<unsigned>(camera_config.frame_size),
                 static_cast<unsigned>(camera_config.jpeg_quality),
                 psramFound() ? "yes" : "no");
