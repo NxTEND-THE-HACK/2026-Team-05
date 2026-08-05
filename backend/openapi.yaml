@@ -1,0 +1,244 @@
+openapi: 3.1.0
+info:
+  title: Gesture Smart Home API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      responses:
+        "200":
+          description: Healthy
+  /internal/detections:
+    post:
+      summary: Receive a motion detection event
+      description: camera_id identifies the recognition source/room and never implies a target device. The backend executes only an explicitly configured binding.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DetectionEvent"
+      responses:
+        "200":
+          description: The event was processed or deduplicated
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/cameras:
+    get:
+      responses:
+        "200":
+          description: Camera list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cameras]
+                properties:
+                  cameras:
+                    type: array
+                    items: { $ref: "#/components/schemas/Camera" }
+  /api/motions:
+    get:
+      responses:
+        "200":
+          description: Motion list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [motions]
+                properties:
+                  motions:
+                    type: array
+                    items: { $ref: "#/components/schemas/Motion" }
+  /api/appliances:
+    get:
+      responses:
+        "200":
+          description: Appliance list
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppliance"
+      responses:
+        "201":
+          description: Created appliance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appliance" }
+  /api/actions:
+    get:
+      parameters:
+        - in: query
+          name: applianceId
+          schema: { type: string }
+      responses:
+        "200":
+          description: Action list
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAction"
+      responses:
+        "201":
+          description: Created action
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Action" }
+  /api/actions/{id}/execute:
+    post:
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Manual execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+  /api/bindings:
+    get:
+      responses:
+        "200":
+          description: Binding list
+    post:
+      description: Creates a motion-to-action binding or replaces the action assigned to an existing motion.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBinding"
+      responses:
+        "201":
+          description: Created or updated binding
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MotionBinding" }
+  /api/logs:
+    get:
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        "200":
+          description: Action log list
+components:
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+  schemas:
+    DetectionEvent:
+      type: object
+      additionalProperties: false
+      required: [event_id, camera_id, motion_code, confidence, detected_at]
+      properties:
+        event_id: { type: string, maxLength: 128 }
+        camera_id: { type: string }
+        motion_code: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        detected_at: { type: string, format: date-time }
+    Camera:
+      type: object
+      required: [id, name, streamUrl, location, isEnabled, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        streamUrl: { type: string }
+        location: { type: string }
+        isEnabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    Motion:
+      type: object
+      required: [id, code, name, description]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string }
+    Appliance:
+      type: object
+      required: [id, name, category, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        category: { type: string }
+        createdAt: { type: string, format: date-time }
+    CreateAppliance:
+      type: object
+      additionalProperties: false
+      required: [name, category]
+      properties:
+        name: { type: string }
+        category: { type: string }
+    Action:
+      type: object
+      required: [id, applianceId, name, providerType, params]
+      properties:
+        id: { type: string }
+        applianceId: { type: string }
+        name: { type: string }
+        providerType: { type: string, enum: [TUYA] }
+        params: { $ref: "#/components/schemas/TuyaParams" }
+    CreateAction:
+      type: object
+      additionalProperties: false
+      required: [applianceId, name, providerType, params]
+      properties:
+        applianceId: { type: string }
+        name: { type: string }
+        providerType: { type: string, enum: [TUYA] }
+        params: { $ref: "#/components/schemas/TuyaParams" }
+    TuyaParams:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        deviceId: { type: string }
+        deviceIdEnv: { type: string, enum: [PLUG_A_ID, PLUG_B_ID, PLUG_C_ID] }
+        switchCode: { type: string, default: switch }
+        value: { type: boolean }
+    MotionBinding:
+      type: object
+      required: [id, motionId, actionId, isEnabled, createdAt]
+      properties:
+        id: { type: string }
+        cameraId:
+          type: string
+          description: Optional metadata reserved for future room-specific behavior. It is not currently used to select an action.
+        motionId: { type: string }
+        actionId: { type: string }
+        isEnabled: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    CreateBinding:
+      type: object
+      additionalProperties: false
+      required: [motionId, actionId]
+      properties:
+        cameraId:
+          type: string
+          description: Optional registered camera ID retained for future use.
+        motionId: { type: string }
+        actionId: { type: string }

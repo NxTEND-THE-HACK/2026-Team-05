@@ -1,0 +1,5 @@
+.env
+backend
+/server
+coverage.out
+logs/

@@ -1,0 +1,1 @@
+"""MediaPipe inference adapters."""
