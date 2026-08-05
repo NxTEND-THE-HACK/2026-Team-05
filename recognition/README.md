@@ -27,6 +27,16 @@ GO_API_URL=http://192.168.50.11:8080/internal/detections
 
 See `.env.example` for the complete list of settings.
 
+Before running locally, download the MediaPipe Tasks model assets:
+
+```bash
+python scripts/download_models.py --output-dir models
+```
+
+The `.task` files are ignored by Git because they are binary assets. Keep
+them on the demo machine or build them into the Docker image. Override
+`POSE_MODEL_PATH` and `HAND_MODEL_PATH` when using another model directory.
+
 ## Runtime architecture
 
 One worker process is started per camera. `CAMERA_SOURCE` must be an HTTP
@@ -69,6 +79,8 @@ Build the image from this directory and run one container per camera:
 docker build -t gesture-recognition .
 docker run --rm --env-file .env.camera-1 gesture-recognition
 ```
+
+The Docker build downloads the pinned MediaPipe Tasks models into the image.
 
 Use a separate env file for each camera. The Go API and PostgreSQL are not
 embedded in this image.

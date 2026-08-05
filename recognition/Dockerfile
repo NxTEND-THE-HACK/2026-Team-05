@@ -10,7 +10,9 @@ RUN apt-get update \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
+COPY scripts ./scripts
 
 RUN pip install --no-cache-dir .
+RUN python scripts/download_models.py --output-dir /app/models
 
 CMD ["gesture-recognition"]
