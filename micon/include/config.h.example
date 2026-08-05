@@ -1,0 +1,21 @@
+#pragma once
+
+// Copy this file to include/config.h and edit the values for each device.
+// Do not commit the copied config.h because it contains the Wi-Fi password.
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+
+// Use a different ID on each of the two boards.
+#define CAMERA_ID "demo-camera-1"
+
+// 80 is convenient for the Python worker: http://<camera-ip>/stream
+#define CAMERA_HTTP_PORT 80
+
+// SVGA gives Pose + Hands more pixels to work with. If the actual LAN or
+// recognition worker cannot sustain the target rate, switch to VGA or QVGA.
+#define CAMERA_FRAME_SIZE FRAMESIZE_SVGA
+
+// ESP32 camera JPEG quality uses a lower number for higher image quality.
+// 8 is a high-quality starting point for SVGA streaming; 5-7 is sharper but
+// heavier and may reduce the achievable FPS.
+#define CAMERA_JPEG_QUALITY 8
