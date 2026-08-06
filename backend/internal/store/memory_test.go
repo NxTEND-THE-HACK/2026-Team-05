@@ -101,6 +101,36 @@ func TestMemoryHasNoImplicitCameraToDeviceBinding(t *testing.T) {
 	}
 }
 
+func TestMemorySeedContainsEveryRecognitionMotion(t *testing.T) {
+	repository := NewMemory(DefaultSeed(time.Now()))
+	motions, err := repository.ListMotions(context.Background())
+	if err != nil {
+		t.Fatalf("ListMotions() error = %v", err)
+	}
+
+	want := map[string]bool{
+		"POSE_RIGHT_HAND_UP": false,
+		"POSE_LEFT_HAND_UP": false,
+		"MOTION_SWIPE_RIGHT": false,
+		"MOTION_SWIPE_LEFT": false,
+		"MOTION_FINGER_SNAP": false,
+		"MOTION_THUMBS_UP_MOVE_UP": false,
+		"MOTION_THUMBS_DOWN_MOVE_DOWN": false,
+		"MOTION_CLAP": false,
+		"MOTION_OPEN_TO_FIST_DOWN": false,
+	}
+	for _, motion := range motions {
+		if _, ok := want[motion.Code]; ok {
+			want[motion.Code] = true
+		}
+	}
+	for code, found := range want {
+		if !found {
+			t.Errorf("motion %q is missing from the backend seed", code)
+		}
+	}
+}
+
 func TestMemoryRejectsUnknownDetection(t *testing.T) {
 	now := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
 	repository := NewMemory(DefaultSeed(now))

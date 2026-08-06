@@ -8,6 +8,15 @@
 // Use a different ID on each of the two boards.
 #define CAMERA_ID "demo-camera-1"
 
+// Set this to 0 to use DHCP. For static IP, give each camera a unique address
+// outside the router's DHCP pool. Example network: camera-1=.105, camera-2=.106.
+#define CAMERA_USE_STATIC_IP 1
+#define CAMERA_STATIC_IP "192.168.10.105"
+#define CAMERA_GATEWAY "192.168.10.1"
+#define CAMERA_SUBNET "255.255.255.0"
+#define CAMERA_PRIMARY_DNS "192.168.10.1"
+#define CAMERA_SECONDARY_DNS "8.8.8.8"
+
 // 80 is convenient for the Python worker: http://<camera-ip>/stream
 #define CAMERA_HTTP_PORT 80
 

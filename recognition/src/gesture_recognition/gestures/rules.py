@@ -40,31 +40,35 @@ def _angle(first: Landmark, middle: Landmark, last: Landmark) -> float:
 
 
 @dataclass(slots=True)
-class RightHandRaisedRule:
-    """Emit once after the right hand is held above the shoulder."""
+class _HandRaisedRule:
+    """Shared held-above-shoulder rule for either hand."""
 
-    hold_seconds: float = 0.6
-    minimum_vertical_gap: float = 0.08
-    motion_code: str = "POSE_RIGHT_HAND_UP"
+    handedness: str
+    wrist_name: str
+    elbow_name: str
+    shoulder_name: str
+    motion_code: str
+    hold_seconds: float = 0.45
+    minimum_vertical_gap: float = 0.05
+    minimum_elbow_angle: float = 90.0
 
     _active_since: datetime | None = None
     _latched: bool = False
 
     def update(self, frame: LandmarkFrame) -> GestureDetection | None:
-        wrist = frame.pose.get(RIGHT_WRIST)
-        elbow = frame.pose.get(RIGHT_ELBOW)
-        shoulder = frame.pose.get(RIGHT_SHOULDER)
+        wrist = frame.pose.get(self.wrist_name)
+        elbow = frame.pose.get(self.elbow_name)
+        shoulder = frame.pose.get(self.shoulder_name)
         if (
             wrist is None
             or elbow is None
             or shoulder is None
             or not _visible(wrist, elbow, shoulder)
-            or _hand(frame, "Right") is None
+            or _hand(frame, self.handedness) is None
             or shoulder.y - wrist.y < self.minimum_vertical_gap
-            or _angle(wrist, elbow, shoulder) < 100.0
+            or _angle(wrist, elbow, shoulder) < self.minimum_elbow_angle
         ):
-            self._active_since = None
-            self._latched = False
+            self.reset()
             return None
 
         if self._latched:
@@ -88,28 +92,76 @@ class RightHandRaisedRule:
         return min(1.0, max(0.0, 0.5 + gap))
 
 
-@dataclass(slots=True)
-class SwipeRightRule:
-    """Detect one rightward wrist movement, then wait for reset."""
+class RightHandRaisedRule(_HandRaisedRule):
+    """Emit once after the right hand is held above the shoulder."""
 
-    movement_threshold: float = 0.18
+    def __init__(
+        self,
+        *,
+        hold_seconds: float = 0.45,
+        minimum_vertical_gap: float = 0.05,
+        minimum_elbow_angle: float = 90.0,
+    ) -> None:
+        super().__init__(
+            "Right",
+            RIGHT_WRIST,
+            RIGHT_ELBOW,
+            RIGHT_SHOULDER,
+            "POSE_RIGHT_HAND_UP",
+            hold_seconds,
+            minimum_vertical_gap,
+            minimum_elbow_angle,
+        )
+
+
+class LeftHandRaisedRule(_HandRaisedRule):
+    """Emit once after the left hand is held above the shoulder."""
+
+    def __init__(
+        self,
+        *,
+        hold_seconds: float = 0.45,
+        minimum_vertical_gap: float = 0.05,
+        minimum_elbow_angle: float = 90.0,
+    ) -> None:
+        super().__init__(
+            "Left",
+            "LEFT_WRIST",
+            "LEFT_ELBOW",
+            "LEFT_SHOULDER",
+            "POSE_LEFT_HAND_UP",
+            hold_seconds,
+            minimum_vertical_gap,
+            minimum_elbow_angle,
+        )
+
+
+@dataclass(slots=True)
+class _SwipeRule:
+    """Shared horizontal wrist movement rule for either hand."""
+
+    handedness: str
+    wrist_name: str
+    shoulder_name: str
+    direction: float
+    motion_code: str
+    movement_threshold: float = 0.12
     reset_margin: float = 0.05
-    motion_code: str = "MOTION_SWIPE_RIGHT"
 
     _start_x: float | None = None
     _latched: bool = False
 
     def update(self, frame: LandmarkFrame) -> GestureDetection | None:
-        wrist = frame.pose.get(RIGHT_WRIST)
-        shoulder = frame.pose.get(RIGHT_SHOULDER)
-        if wrist is None or shoulder is None or _hand(frame, "Right") is None:
+        wrist = frame.pose.get(self.wrist_name)
+        shoulder = frame.pose.get(self.shoulder_name)
+        if wrist is None or shoulder is None or _hand(frame, self.handedness) is None:
             return None
 
         if self._start_x is None:
             self._start_x = wrist.x
             return None
 
-        movement = wrist.x - self._start_x
+        movement = self.direction * (wrist.x - self._start_x)
         if not self._latched and movement >= self.movement_threshold:
             self._latched = True
             return GestureDetection(
@@ -117,13 +169,31 @@ class SwipeRightRule:
                 min(1.0, max(0.0, movement / (self.movement_threshold * 2))),
             )
 
-        if self._latched and wrist.x <= self._start_x + self.reset_margin:
+        if self._latched and self.direction * (wrist.x - self._start_x) <= self.reset_margin:
             self.reset()
         return None
 
     def reset(self) -> None:
         self._start_x = None
         self._latched = False
+
+
+class SwipeRightRule(_SwipeRule):
+    """Detect one rightward right-wrist movement, then wait for reset."""
+
+    def __init__(self, *, movement_threshold: float = 0.12, reset_margin: float = 0.05) -> None:
+        super().__init__(
+            "Right", RIGHT_WRIST, RIGHT_SHOULDER, 1.0, "MOTION_SWIPE_RIGHT", movement_threshold, reset_margin
+        )
+
+
+class SwipeLeftRule(_SwipeRule):
+    """Detect one leftward left-wrist movement, then wait for reset."""
+
+    def __init__(self, *, movement_threshold: float = 0.12, reset_margin: float = 0.05) -> None:
+        super().__init__(
+            "Left", "LEFT_WRIST", "LEFT_SHOULDER", -1.0, "MOTION_SWIPE_LEFT", movement_threshold, reset_margin
+        )
 
 
 @dataclass(slots=True)
@@ -136,10 +206,10 @@ class FingerSnapRule:
     """
 
     motion_code: str = "MOTION_FINGER_SNAP"
-    extended_index_angle: float = 155.0
-    extended_thumb_angle: float = 115.0
-    curled_finger_angle: float = 145.0
-    thumb_middle_contact_ratio: float = 1.2
+    extended_index_angle: float = 150.0
+    extended_thumb_angle: float = 105.0
+    curled_finger_angle: float = 150.0
+    thumb_middle_contact_ratio: float = 1.35
 
     _armed: bool = False
     _latched: bool = False
@@ -194,10 +264,7 @@ class FingerSnapRule:
         return _joint_angle(hand, 2, 3, 4) >= self.extended_thumb_angle
 
     def _other_fingers_curled(self, hand: HandObservation) -> bool:
-        return all(
-            _joint_angle(hand, mcp, pip, tip) <= self.curled_finger_angle
-            for mcp, pip, tip in ((9, 10, 12), (13, 14, 16), (17, 18, 20))
-        )
+        return _other_fingers_curled(hand, self.curled_finger_angle)
 
     def _thumb_middle_distance(self, hand: HandObservation) -> float:
         palm_size = max(landmark_distance(hand.point(0), hand.point(9)), 0.001)
@@ -207,6 +274,227 @@ class FingerSnapRule:
         index_margin = _joint_angle(hand, 5, 6, 8) / 180.0
         thumb_margin = _joint_angle(hand, 2, 3, 4) / 180.0
         return min(1.0, max(0.0, (index_margin + thumb_margin) / 2.0))
+
+
+def _other_fingers_curled(hand: HandObservation, maximum_angle: float) -> bool:
+    return all(
+        _joint_angle(hand, mcp, pip, tip) <= maximum_angle
+        for mcp, pip, tip in ((9, 10, 12), (13, 14, 16), (17, 18, 20))
+    )
+
+
+def _is_thumbs_up(hand: HandObservation) -> bool:
+    return (
+        _joint_angle(hand, 2, 3, 4) >= 105.0
+        and _other_fingers_curled(hand, 155.0)
+        and hand.point(4).y <= hand.point(0).y - 0.03
+    )
+
+
+def _is_thumbs_down(hand: HandObservation) -> bool:
+    return (
+        _joint_angle(hand, 2, 3, 4) >= 105.0
+        and _other_fingers_curled(hand, 155.0)
+        and hand.point(4).y >= hand.point(0).y + 0.03
+    )
+
+
+@dataclass(slots=True)
+class _ThumbVerticalMotionRule:
+    """Detect a vertical movement that starts in a right-hand thumb pose."""
+
+    pose_name: str
+    direction: float
+    motion_code: str
+    movement_threshold: float = 0.10
+
+    _start_y: float | None = None
+    _armed: bool = False
+    _latched: bool = False
+
+    def update(self, frame: LandmarkFrame) -> GestureDetection | None:
+        hand = _hand(frame, "Right")
+        if hand is None or len(hand.landmarks) < 21:
+            return None
+
+        pose = (
+            _is_thumbs_up(hand)
+            if self.pose_name == "up"
+            else _is_thumbs_down(hand)
+        )
+        if self._latched:
+            if not pose:
+                self.reset()
+            return None
+
+        if not pose:
+            if self._armed:
+                self.reset()
+            return None
+
+        if not self._armed:
+            self._armed = True
+            self._start_y = hand.point(0).y
+            return None
+
+        assert self._start_y is not None
+        movement = self.direction * (self._start_y - hand.point(0).y)
+        if movement < self.movement_threshold:
+            return None
+
+        self._latched = True
+        confidence = min(
+            1.0,
+            max(0.0, movement / (self.movement_threshold * 2)),
+        )
+        return GestureDetection(self.motion_code, confidence)
+
+    def reset(self) -> None:
+        self._start_y = None
+        self._armed = False
+        self._latched = False
+
+
+class ThumbsUpMoveUpRule(_ThumbVerticalMotionRule):
+    """Detect a right-hand thumbs-up followed by upward movement."""
+
+    def __init__(self, *, movement_threshold: float = 0.10) -> None:
+        super().__init__("up", 1.0, "MOTION_THUMBS_UP_MOVE_UP", movement_threshold)
+
+
+class ThumbsDownMoveDownRule(_ThumbVerticalMotionRule):
+    """Detect a right-hand thumbs-down followed by downward movement."""
+
+    def __init__(self, *, movement_threshold: float = 0.10) -> None:
+        super().__init__("down", -1.0, "MOTION_THUMBS_DOWN_MOVE_DOWN", movement_threshold)
+
+
+@dataclass(slots=True)
+class ClapRule:
+    """Detect both hands moving from apart to a close palm-to-palm position."""
+
+    contact_ratio: float = 1.35
+    release_ratio: float = 1.80
+
+    _armed: bool = False
+    _latched: bool = False
+    _previous_ratio: float | None = None
+
+    def update(self, frame: LandmarkFrame) -> GestureDetection | None:
+        left = _hand(frame, "Left")
+        right = _hand(frame, "Right")
+        if (
+            left is None
+            or right is None
+            or len(left.landmarks) < 21
+            or len(right.landmarks) < 21
+        ):
+            return None
+
+        ratio = self._palm_distance_ratio(left, right)
+        previous_ratio = self._previous_ratio
+        self._previous_ratio = ratio
+
+        if ratio >= self.release_ratio:
+            self._armed = True
+            self._latched = False
+            return None
+
+        if (
+            self._armed
+            and not self._latched
+            and ratio <= self.contact_ratio
+            and previous_ratio is not None
+            and ratio < previous_ratio
+        ):
+            self._latched = True
+            confidence = (self.release_ratio - ratio) / (
+                self.release_ratio - self.contact_ratio
+            )
+            return GestureDetection(
+                "MOTION_CLAP",
+                min(1.0, max(0.0, confidence)),
+            )
+        return None
+
+    def reset(self) -> None:
+        self._armed = False
+        self._latched = False
+        self._previous_ratio = None
+
+    def _palm_distance_ratio(
+        self, left: HandObservation, right: HandObservation
+    ) -> float:
+        distance = landmark_distance(left.point(0), right.point(0))
+        left_size = landmark_distance(left.point(0), left.point(9))
+        right_size = landmark_distance(right.point(0), right.point(9))
+        palm_size = max((left_size + right_size) / 2.0, 0.001)
+        return distance / palm_size
+
+
+def _is_open_palm(hand: HandObservation) -> bool:
+    return (
+        _joint_angle(hand, 2, 3, 4) >= 105.0
+        and all(
+            _joint_angle(hand, mcp, pip, tip) >= 140.0
+            for mcp, pip, tip in (
+                (5, 6, 8),
+                (9, 10, 12),
+                (13, 14, 16),
+                (17, 18, 20),
+            )
+        )
+    )
+
+
+def _is_fist(hand: HandObservation) -> bool:
+    return _other_fingers_curled(hand, 155.0)
+
+
+@dataclass(slots=True)
+class OpenToFistDownRule:
+    """Detect a right hand changing from an open palm to a fist while lowering."""
+
+    movement_threshold: float = 0.10
+
+    _start_y: float | None = None
+    _armed: bool = False
+    _latched: bool = False
+
+    def update(self, frame: LandmarkFrame) -> GestureDetection | None:
+        hand = _hand(frame, "Right")
+        if hand is None or len(hand.landmarks) < 21:
+            return None
+
+        if self._latched:
+            if not _is_fist(hand):
+                self.reset()
+            return None
+
+        if _is_open_palm(hand):
+            self._armed = True
+            self._start_y = hand.point(0).y
+            return None
+
+        if not self._armed or not _is_fist(hand):
+            return None
+
+        assert self._start_y is not None
+        movement = hand.point(0).y - self._start_y
+        if movement < self.movement_threshold:
+            return None
+
+        self._latched = True
+        confidence = min(
+            1.0,
+            max(0.0, movement / (self.movement_threshold * 2)),
+        )
+        return GestureDetection("MOTION_OPEN_TO_FIST_DOWN", confidence)
+
+    def reset(self) -> None:
+        self._start_y = None
+        self._armed = False
+        self._latched = False
 
 
 def _joint_angle(
