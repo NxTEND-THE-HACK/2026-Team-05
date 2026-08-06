@@ -12,18 +12,18 @@ export function AppLayout() {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Sider
-        collapsible
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        breakpoint="lg"
-        theme="dark"
-        width={240}
-      >
-        <Sidebar />
-      </Sider>
+      <Header />
       <Layout>
-        <Header />
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          breakpoint="lg"
+          theme="dark"
+          width={240}
+        >
+          <Sidebar />
+        </Sider>
         <Content style={{ padding: 24, background: token.colorBgLayout }}>
           <Outlet />
         </Content>

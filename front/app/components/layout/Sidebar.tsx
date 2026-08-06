@@ -45,29 +45,13 @@ export function Sidebar() {
   };
 
   return (
-    <>
-      <div
-        style={{
-          height: 64,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#fff",
-          fontSize: 18,
-          fontWeight: 700,
-          borderBottom: "1px solid rgba(255,255,255,0.1)",
-          letterSpacing: 1,
-        }}
-      >
-        Remo-Trace
-      </div>
-      <Menu
-        theme="dark"
-        mode="inline"
-        selectedKeys={[selectedKey]}
-        items={menuItems}
-        onClick={onClick}
-      />
-    </>
+    <Menu
+      theme="dark"
+      mode="inline"
+      selectedKeys={[selectedKey]}
+      items={menuItems}
+      onClick={onClick}
+      style={{ borderInlineEnd: "none" }}
+    />
   );
 }

@@ -1,4 +1,4 @@
-import { Layout, Typography, Space, theme } from "antd";
+import { Layout, Typography, theme } from "antd";
 import { ApiStatusBadge } from "../dashboard/ApiStatusBadge";
 
 const { Header: AntHeader } = Layout;
@@ -18,8 +18,8 @@ export function Header() {
         borderBottom: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
-      <Text strong style={{ fontSize: 16 }}>
-        Remo-Trace Dashboard
+      <Text strong style={{ fontSize: 18, letterSpacing: 1 }}>
+        Remo-Trace
       </Text>
       <ApiStatusBadge />
     </AntHeader>
