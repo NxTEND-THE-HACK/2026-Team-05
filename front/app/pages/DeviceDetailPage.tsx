@@ -11,6 +11,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useParams } from "react-router";
+import { BackToDashboard } from "~/components/common/BackToDashboard";
 import { useAppliances } from "~/hooks/useAppliances";
 import { useBindings } from "~/hooks/useBindings";
 import { useActions } from "~/hooks/useActions";
@@ -93,16 +94,20 @@ export function DeviceDetailPage() {
 
   if (!appliance) {
     return (
-      <Result
-        status="404"
-        title="Device Not Found"
-        subTitle={`デバイス ID: ${deviceId ?? "(unknown)"} は見つかりません`}
-      />
+      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+        <BackToDashboard />
+        <Result
+          status="404"
+          title="Device Not Found"
+          subTitle={`デバイス ID: ${deviceId ?? "(unknown)"} は見つかりません`}
+        />
+      </Space>
     );
   }
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <BackToDashboard />
       <Title level={3} style={{ margin: 0 }}>
         {appliance.name}
       </Title>

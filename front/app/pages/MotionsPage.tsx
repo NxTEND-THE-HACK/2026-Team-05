@@ -1,5 +1,6 @@
 import { Space, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { BackToDashboard } from "~/components/common/BackToDashboard";
 import { useMotions } from "~/hooks/useMotions";
 import type { Motion } from "~/types/backendApi";
 
@@ -30,6 +31,7 @@ export function MotionsPage() {
 
   return (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <BackToDashboard />
       <Title level={3} style={{ margin: 0 }}>
         Motions
       </Title>

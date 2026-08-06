@@ -15,6 +15,7 @@ import { useMotions } from "~/hooks/useMotions";
 import { useAppliances } from "~/hooks/useAppliances";
 import { useActions } from "~/hooks/useActions";
 import { useBindings } from "~/hooks/useBindings";
+import { BackToDashboard } from "~/components/common/BackToDashboard";
 import { NewMotionModal } from "../components/dashboard/NewMotionModal";
 import type { MotionBinding, Appliance, Motion, Action } from "~/types/backendApi";
 
@@ -114,6 +115,7 @@ export function BindingsPage() {
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <BackToDashboard />
       <Title level={3} style={{ margin: 0 }}>
         Device & Binding Management
       </Title>

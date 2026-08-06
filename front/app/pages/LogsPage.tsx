@@ -9,6 +9,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
+import { BackToDashboard } from "~/components/common/BackToDashboard";
 import { useLogs } from "~/hooks/useLogs";
 import type { ActionLog } from "~/types/backendApi";
 
@@ -64,6 +65,7 @@ export function LogsPage() {
 
   return (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <BackToDashboard />
       <Title level={3} style={{ margin: 0 }}>
         Action Logs
       </Title>

@@ -13,6 +13,7 @@ import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
+import { BackToDashboard } from "~/components/common/BackToDashboard";
 import { useAppliances } from "~/hooks/useAppliances";
 import { queryKeys } from "~/hooks/queryKeys";
 import { request } from "~/services/backendApiClient";
@@ -83,6 +84,7 @@ export function DevicesPage() {
 
   return (
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <BackToDashboard />
       <div
         style={{
           display: "flex",
