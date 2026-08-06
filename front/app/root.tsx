@@ -6,7 +6,7 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
-import { ConfigProvider } from "antd";
+import { ConfigProvider, theme } from "antd";
 
 import type { Route } from "./+types/root";
 import { QueryProvider } from "./components/common/QueryProvider";
@@ -47,6 +47,7 @@ export default function App() {
   return (
     <ConfigProvider
       theme={{
+        algorithm: theme.darkAlgorithm,
         token: {
           colorPrimary: "#1677ff",
           borderRadius: 6,

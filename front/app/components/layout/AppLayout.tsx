@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet } from "react-router";
-import { Layout } from "antd";
+import { Layout, theme } from "antd";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 
@@ -8,6 +8,7 @@ const { Sider, Content } = Layout;
 
 export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const { token } = theme.useToken();
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -23,7 +24,7 @@ export function AppLayout() {
       </Sider>
       <Layout>
         <Header />
-        <Content style={{ padding: 24, background: "#f5f5f5" }}>
+        <Content style={{ padding: 24, background: token.colorBgLayout }}>
           <Outlet />
         </Content>
       </Layout>
