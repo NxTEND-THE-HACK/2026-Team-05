@@ -24,7 +24,7 @@ export function AppLayout() {
         >
           <Sidebar />
         </Sider>
-        <Content style={{ padding: 24, background: token.colorBgLayout }}>
+        <Content style={{ padding: "32px 40px", background: token.colorBgLayout }}>
           <Outlet />
         </Content>
       </Layout>
