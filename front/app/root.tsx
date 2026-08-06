@@ -6,10 +6,8 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
-import { ConfigProvider, theme } from "antd";
 
 import type { Route } from "./+types/root";
-import { QueryProvider } from "./components/common/QueryProvider";
 import "./app.css";
 
 export const links: Route.LinksFunction = () => [
@@ -44,26 +42,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return (
-    <ConfigProvider
-      theme={{
-        algorithm: theme.darkAlgorithm,
-        token: {
-          colorPrimary: "#1677ff",
-          borderRadius: 0,
-        },
-      }}
-    >
-      <QueryProvider>
-        <Outlet />
-      </QueryProvider>
-    </ConfigProvider>
-  );
+  return <Outlet />;
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = "Error";
+  let message = "Oops!";
   let details = "An unexpected error occurred.";
+  let stack: string | undefined;
 
   if (isRouteErrorResponse(error)) {
     message = error.status === 404 ? "404" : "Error";
@@ -73,12 +58,18 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
         : error.statusText || details;
   } else if (import.meta.env.DEV && error && error instanceof Error) {
     details = error.message;
+    stack = error.stack;
   }
 
   return (
-    <div style={{ padding: 48, maxWidth: 600, margin: "0 auto" }}>
+    <main className="pt-16 p-4 container mx-auto">
       <h1>{message}</h1>
       <p>{details}</p>
-    </div>
+      {stack && (
+        <pre className="w-full p-4 overflow-x-auto">
+          <code>{stack}</code>
+        </pre>
+      )}
+    </main>
   );
 }

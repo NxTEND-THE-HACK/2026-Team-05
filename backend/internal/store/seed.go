@@ -34,7 +34,6 @@ func DefaultSeed(now time.Time) SeedData {
 		Motions: []domain.Motion{
 			{ID: "motion-pose-right-hand-up", Code: "POSE_RIGHT_HAND_UP", Name: "右手上げ", Description: "右手首を右肩より上で0.6秒保持"},
 			{ID: "motion-swipe-right", Code: "MOTION_SWIPE_RIGHT", Name: "右スワイプ", Description: "右手を右方向へスワイプ"},
-			{ID: "motion-finger-snap", Code: "MOTION_FINGER_SNAP", Name: "指パッチン", Description: "右手を曲げた準備姿勢から人差し指を伸ばす"},
 		},
 		Appliances: []domain.Appliance{
 			{ID: "appliance-plug-a", Name: "スマートプラグA", Category: "スマートプラグ", CreatedAt: now},
