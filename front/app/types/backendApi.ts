@@ -1,7 +1,7 @@
 /**
- * TEMP_BACKEND_DEMO
- * 仮画面専用のAPI型。削除手順は docs/temporary-backend-demo-ui.md を参照。
+ * バックエンドAPI型定義。
  */
+
 export interface Camera {
   id: string;
   name: string;

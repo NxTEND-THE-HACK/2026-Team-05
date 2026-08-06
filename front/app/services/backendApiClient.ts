@@ -1,7 +1,7 @@
 /**
- * TEMP_BACKEND_DEMO
- * 仮画面専用のAPIクライアント。削除手順は docs/temporary-backend-demo-ui.md を参照。
+ * バックエンドAPIクライアント。
  */
+
 import type {
   Action,
   ActionLog,
