@@ -179,6 +179,12 @@ GET /api/motions
       "code": "MOTION_SWIPE_RIGHT",
       "name": "右スワイプ",
       "description": "右手を右方向へスワイプ"
+    },
+    {
+      "id": "motion-finger-snap",
+      "code": "MOTION_FINGER_SNAP",
+      "name": "指パッチン",
+      "description": "右手を曲げた準備姿勢から人差し指を伸ばす"
     }
   ]
 }

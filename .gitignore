@@ -1,1 +1,9 @@
 PROJECT_STATUS.md
+frontend_implementation_prompt.md
+frontend_revision_prompt.md
+
+# Environment / secrets — never commit
+.env
+.env.*
+!.env.example
+!**/.env.example
