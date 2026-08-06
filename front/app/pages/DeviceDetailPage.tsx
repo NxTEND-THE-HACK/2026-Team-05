@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
+  Button,
   Card,
   Descriptions,
   Result,
@@ -8,17 +9,23 @@ import {
   Table,
   Tag,
   Typography,
+  message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import {
+  PoweroffOutlined,
+  ThunderboltOutlined,
+} from "@ant-design/icons";
 import { useParams } from "react-router";
 import { BackToDashboard } from "~/components/common/BackToDashboard";
 import { useAppliances } from "~/hooks/useAppliances";
 import { useBindings } from "~/hooks/useBindings";
 import { useActions } from "~/hooks/useActions";
 import { useMotions } from "~/hooks/useMotions";
+import { useExecuteAction } from "~/hooks/useExecuteAction";
 import type { MotionBinding, Motion, Action } from "~/types/backendApi";
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 interface BindingRow {
   key: string;
@@ -27,7 +34,7 @@ interface BindingRow {
   action?: Action;
 }
 
-const columns: ColumnsType<BindingRow> = [
+const bindingColumns: ColumnsType<BindingRow> = [
   {
     title: "Motion",
     key: "motion",
@@ -57,8 +64,11 @@ export function DeviceDetailPage() {
   const { data: appliances = [], isLoading: appliancesLoading } =
     useAppliances();
   const { data: bindings = [], isLoading: bindingsLoading } = useBindings();
-  const { data: actions = [], isLoading: actionsLoading } = useActions();
+  const { data: actions = [], isLoading: actionsLoading } =
+    useActions(deviceId);
   const { data: motions = [], isLoading: motionsLoading } = useMotions();
+  const executeAction = useExecuteAction();
+  const [executingId, setExecutingId] = useState<string | null>(null);
 
   const loading =
     appliancesLoading || bindingsLoading || actionsLoading || motionsLoading;
@@ -66,6 +76,18 @@ export function DeviceDetailPage() {
   const appliance = useMemo(
     () => appliances.find((a) => a.id === deviceId),
     [appliances, deviceId],
+  );
+
+  const deviceActions = useMemo(
+    () =>
+      actions.filter((a) => a.applianceId === appliance?.id).sort((a, b) => {
+        // Prefer ON before OFF when value is known
+        const av = a.params.value === true ? 0 : a.params.value === false ? 1 : 2;
+        const bv = b.params.value === true ? 0 : b.params.value === false ? 1 : 2;
+        if (av !== bv) return av - bv;
+        return a.name.localeCompare(b.name);
+      }),
+    [actions, appliance?.id],
   );
 
   const bindingRows: BindingRow[] = useMemo(() => {
@@ -83,6 +105,71 @@ export function DeviceDetailPage() {
     }
     return rows;
   }, [appliance, bindings, actions, motions]);
+
+  const handleExecute = async (action: Action) => {
+    setExecutingId(action.id);
+    try {
+      const result = await executeAction.mutateAsync(action.id);
+      if (result.success) {
+        message.success(`「${action.name}」を実行しました`);
+      } else {
+        message.error(
+          result.message
+            ? `実行失敗: ${result.message}`
+            : `「${action.name}」の実行に失敗しました`,
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "実行に失敗しました";
+      message.error(msg);
+    } finally {
+      setExecutingId(null);
+    }
+  };
+
+  const actionColumns: ColumnsType<Action> = [
+    {
+      title: "Action",
+      dataIndex: "name",
+      key: "name",
+    },
+    {
+      title: "Type",
+      key: "type",
+      width: 120,
+      render: (_: unknown, action: Action) => {
+        if (action.params.value === true) {
+          return <Tag color="success">ON</Tag>;
+        }
+        if (action.params.value === false) {
+          return <Tag color="default">OFF</Tag>;
+        }
+        return <Tag>OTHER</Tag>;
+      },
+    },
+    {
+      title: "Control",
+      key: "control",
+      width: 140,
+      render: (_: unknown, action: Action) => {
+        const isOn = action.params.value === true;
+        const isOff = action.params.value === false;
+        return (
+          <Button
+            type={isOn ? "primary" : isOff ? "default" : "primary"}
+            danger={isOff}
+            size="small"
+            icon={isOn ? <ThunderboltOutlined /> : <PoweroffOutlined />}
+            loading={executingId === action.id}
+            disabled={executingId !== null && executingId !== action.id}
+            onClick={() => handleExecute(action)}
+          >
+            {isOn ? "ON" : isOff ? "OFF" : "実行"}
+          </Button>
+        );
+      },
+    },
+  ];
 
   if (loading) {
     return (
@@ -123,14 +210,38 @@ export function DeviceDetailPage() {
           <Descriptions.Item label="ID">{appliance.id}</Descriptions.Item>
         </Descriptions>
       </Card>
+
+      <Card
+        title="Manual Control"
+        extra={
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            モーションを使わずに直接操作
+          </Text>
+        }
+      >
+        <Table
+          columns={actionColumns}
+          dataSource={deviceActions}
+          rowKey="id"
+          pagination={false}
+          size="middle"
+          locale={{
+            emptyText:
+              "このデバイスに登録されたアクションがありません。アクション作成後に手動操作できます。",
+          }}
+        />
+      </Card>
+
       <Card title="Binded Motions">
         <Table
-          columns={columns}
+          columns={bindingColumns}
           dataSource={bindingRows}
           rowKey="key"
           pagination={false}
           size="middle"
-          locale={{ emptyText: "このデバイスにバインドされたモーションはありません" }}
+          locale={{
+            emptyText: "このデバイスにバインドされたモーションはありません",
+          }}
         />
       </Card>
     </Space>
