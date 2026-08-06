@@ -1,4 +1,4 @@
-import { Card, Col, Row, Statistic } from "antd";
+import { Card, Col, Statistic } from "antd";
 import type { ReactNode } from "react";
 
 interface SummaryCardProps {
@@ -6,12 +6,19 @@ interface SummaryCardProps {
   value: number;
   icon?: ReactNode;
   onClick?: () => void;
+  loading?: boolean;
 }
 
-export function SummaryCard({ title, value, icon, onClick }: SummaryCardProps) {
+export function SummaryCard({
+  title,
+  value,
+  icon,
+  onClick,
+  loading,
+}: SummaryCardProps) {
   return (
     <Col xs={24} sm={12} md={6}>
-      <Card hoverable={!!onClick} onClick={onClick}>
+      <Card hoverable={!!onClick} onClick={onClick} loading={loading}>
         <Statistic
           title={title}
           value={value}

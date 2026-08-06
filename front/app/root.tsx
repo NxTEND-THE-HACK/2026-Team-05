@@ -50,7 +50,7 @@ export default function App() {
         algorithm: theme.darkAlgorithm,
         token: {
           colorPrimary: "#1677ff",
-          borderRadius: 6,
+          borderRadius: 0,
         },
       }}
     >

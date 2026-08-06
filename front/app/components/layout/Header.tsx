@@ -19,7 +19,7 @@ export function Header() {
       }}
     >
       <Text strong style={{ fontSize: 16 }}>
-        Gesture Smart Home Dashboard
+        Remo-Trace Dashboard
       </Text>
       <ApiStatusBadge />
     </AntHeader>

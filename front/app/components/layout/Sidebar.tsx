@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { MenuProps } from "antd";
 import { Menu } from "antd";
 import {
@@ -5,45 +6,37 @@ import {
   BulbOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation } from "react-router";
+import { useAppliances } from "~/hooks/useAppliances";
 
 type MenuItem = Required<MenuProps>["items"][number];
-
-const menuItems: MenuItem[] = [
-  {
-    key: "/",
-    icon: <DashboardOutlined />,
-    label: "Dashboard",
-  },
-  {
-    type: "divider",
-  },
-  {
-    key: "group-devices",
-    label: "Devices",
-    type: "group",
-    children: [
-      {
-        key: "/device-1",
-        icon: <BulbOutlined />,
-        label: "Device 1",
-      },
-      {
-        key: "/device-2",
-        icon: <BulbOutlined />,
-        label: "Device 2",
-      },
-      {
-        key: "/device-3",
-        icon: <BulbOutlined />,
-        label: "Device 3",
-      },
-    ],
-  },
-];
 
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { data: appliances = [] } = useAppliances();
+
+  const menuItems: MenuItem[] = useMemo(() => {
+    return [
+      {
+        key: "/",
+        icon: <DashboardOutlined />,
+        label: "Dashboard",
+      },
+      {
+        type: "divider",
+      },
+      {
+        key: "group-devices",
+        label: "Devices",
+        type: "group",
+        children: appliances.map((appliance) => ({
+          key: `/devices/${appliance.id}`,
+          icon: <BulbOutlined />,
+          label: appliance.name,
+        })),
+      },
+    ];
+  }, [appliances]);
 
   const selectedKey = location.pathname === "/" ? "/" : location.pathname;
 
@@ -63,9 +56,10 @@ export function Sidebar() {
           fontSize: 18,
           fontWeight: 700,
           borderBottom: "1px solid rgba(255,255,255,0.1)",
+          letterSpacing: 1,
         }}
       >
-        Smart Home
+        Remo-Trace
       </div>
       <Menu
         theme="dark"
