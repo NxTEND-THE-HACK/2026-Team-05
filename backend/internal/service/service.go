@@ -30,6 +30,18 @@ type ExecuteResult struct {
 	Message string `json:"message,omitempty"`
 }
 
+// ApplianceState は device の現在状態。value が確定できない場合は nil (unknown)。
+// Source は "tuya" / "dry-run" / "no-action" など状態取得の根拠を返す。
+type ApplianceState struct {
+	ApplianceID string `json:"applianceId"`
+	Online      bool   `json:"online"`
+	Value       *bool  `json:"value"`
+	SwitchCode  string `json:"switchCode"`
+	Source      string `json:"source"`
+	Error       string `json:"error,omitempty"`
+	FetchedAt   string `json:"fetchedAt"`
+}
+
 func New(repository store.Store, registry *executor.Registry, cooldown time.Duration) *Service {
 	return &Service{store: repository, executor: registry, cooldown: cooldown, now: func() time.Time { return time.Now().UTC() }}
 }
@@ -100,4 +112,53 @@ func (s *Service) CreateAction(ctx context.Context, input domain.CreateActionInp
 		return domain.Action{}, fmt.Errorf("%w: %v", ErrInvalidAction, err)
 	}
 	return s.store.CreateAction(ctx, input)
+}
+
+// GetApplianceState は appliance に紐づく Action のうち device ID を解決できるものを
+// 1つ選んで provider (Tuya) へ問い合わせ、ON/OFF 状態を返す。
+// 1つも Action が無い、または deviceId を解決できない場合は value=nil, source="no-action" を返す。
+// dry-run モードでは ErrDryRun を検知して source="dry-run" を返す。
+func (s *Service) GetApplianceState(ctx context.Context, applianceID string) (ApplianceState, error) {
+	now := s.now().UTC().Format(time.RFC3339)
+	state := ApplianceState{ApplianceID: applianceID, FetchedAt: now}
+	actions, err := s.store.ListActions(ctx, applianceID)
+	if err != nil {
+		return state, fmt.Errorf("list actions: %w", err)
+	}
+	if len(actions) == 0 {
+		state.Source = "no-action"
+		return state, nil
+	}
+	var resolved *executor.DeviceState
+	var lastErr error
+	for _, a := range actions {
+		deviceID, switchCode, err := s.executor.ResolveDevice(a)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		ds, err := s.executor.GetDeviceState(ctx, deviceID, switchCode, a.ProviderType)
+		if err == nil {
+			resolved = &ds
+			break
+		}
+		// dry-run は致命ではないので特別な source を立てて次を試す。
+		if errors.Is(err, executor.ErrDryRun) {
+			state.Source = "dry-run"
+			return state, nil
+		}
+		lastErr = err
+	}
+	if resolved == nil {
+		if lastErr != nil {
+			return state, lastErr
+		}
+		state.Source = "no-action"
+		return state, nil
+	}
+	state.Online = resolved.Online
+	state.SwitchCode = resolved.SwitchCode
+	state.Value = resolved.Value
+	state.Source = "tuya"
+	return state, nil
 }

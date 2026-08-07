@@ -47,6 +47,7 @@ func New(repository store.Store, appService *service.Service, logger *slog.Logge
 	api.GET("/motions", h.motions)
 	api.GET("/appliances", h.appliances)
 	api.POST("/appliances", h.createAppliance)
+	api.GET("/appliances/:id/state", h.applianceState)
 	api.GET("/actions", h.actions)
 	api.POST("/actions", h.createAction)
 	api.POST("/actions/:id/execute", h.executeAction)
@@ -104,6 +105,25 @@ func (h *Handler) appliances(c echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusOK, map[string]any{"appliances": items})
+}
+
+func (h *Handler) applianceState(c echo.Context) error {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "id is required")
+	}
+	if _, err := h.store.ApplianceByID(c.Request().Context(), id); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 6*time.Second)
+	defer cancel()
+	state, err := h.service.GetApplianceState(ctx, id)
+	if err != nil {
+		// Tuya 側の障害でも UI を生かしたいため、value=null で返して error フィールドに理由を入れる。
+		state.Error = err.Error()
+		return c.JSON(http.StatusOK, state)
+	}
+	return c.JSON(http.StatusOK, state)
 }
 
 func (h *Handler) createAppliance(c echo.Context) error {

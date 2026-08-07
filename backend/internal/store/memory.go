@@ -191,6 +191,16 @@ func (m *Memory) ActionByID(_ context.Context, id string) (domain.Action, error)
 	return item, nil
 }
 
+func (m *Memory) ApplianceByID(_ context.Context, id string) (domain.Appliance, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	item, ok := m.appliances[id]
+	if !ok {
+		return domain.Appliance{}, ErrNotFound
+	}
+	return item, nil
+}
+
 func (m *Memory) ClaimDetection(_ context.Context, event domain.DetectionEvent, cooldown time.Duration, now time.Time) (domain.DetectionClaim, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

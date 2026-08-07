@@ -8,10 +8,12 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router";
 import { BackToDashboard } from "~/components/common/BackToDashboard";
 import { useAppliances } from "~/hooks/useAppliances";
@@ -19,6 +21,8 @@ import { useBindings } from "~/hooks/useBindings";
 import { useActions } from "~/hooks/useActions";
 import { useMotions } from "~/hooks/useMotions";
 import { useExecuteAction } from "~/hooks/useExecuteAction";
+import { useApplianceState } from "~/hooks/useApplianceState";
+import { queryKeys } from "~/hooks/queryKeys";
 import type { MotionBinding, Motion, Action } from "~/types/backendApi";
 
 const { Title, Text } = Typography;
@@ -91,6 +95,7 @@ export function DeviceDetailPage() {
     useActions(deviceId);
   const { data: motions = [], isLoading: motionsLoading } = useMotions();
   const executeAction = useExecuteAction();
+  const queryClient = useQueryClient();
   const [executingId, setExecutingId] = useState<string | null>(null);
 
   const loading =
@@ -115,6 +120,22 @@ export function DeviceDetailPage() {
   // 未実行時は undefined とし、ON 側の Action が存在すれば on 扱い (ON アクションの
   // デフォルト起動起点) とする。値が存在しない場合は OFF として扱う。
   const [optimisticState, setOptimisticState] = useState<Record<string, boolean>>({});
+
+  // バックエンドから実機状態を取得 (Tuya 経由 / dry-run 時は null)。
+  // optimisticState があればそれを優先し、無ければ API 結果、それも無ければ
+  // ON アクション存在可否で暫定表示する。
+  const { data: applianceState, isLoading: applianceStateLoading } =
+    useApplianceState(deviceId);
+
+  const resolveDisplayState = (row: ControlRow): boolean | "unknown" => {
+    if (optimisticState[row.key] !== undefined) return optimisticState[row.key];
+    if (applianceState?.value !== undefined && applianceState.value !== null) {
+      return applianceState.value;
+    }
+    if (row.onAction !== undefined) return true;
+    if (row.offAction !== undefined) return false;
+    return "unknown";
+  };
 
   const bindingRows: BindingRow[] = useMemo(() => {
     if (!appliance) return [];
@@ -146,6 +167,11 @@ export function DeviceDetailPage() {
       const result = await executeAction.mutateAsync(target.id);
       if (result.success) {
         setOptimisticState((prev) => ({ ...prev, [row.key]: next }));
+        // バックエンド側の最新状態を即時取り直す。成功時の偽陽性や
+        // Tuya 側の遅延反映もここで吸収する。
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.applianceState(row.key),
+        });
         message.success(
           `「${row.name}」を${next ? "ON" : "OFF"}にしました`,
         );
@@ -175,11 +201,22 @@ export function DeviceDetailPage() {
       key: "status",
       width: 120,
       render: (_: unknown, row: ControlRow) => {
-        const isOn = optimisticState[row.key] ?? row.onAction !== undefined;
+        const display = resolveDisplayState(row);
+        if (display === "unknown") return <Tag>不明</Tag>;
+        const source = applianceState?.source;
+        const tip = applianceStateLoading
+          ? "実機状態を取得中"
+          : source === "dry-run"
+            ? "dry-run モード: 実機状態は取得できません"
+            : source === "tuya"
+              ? `最終取得: ${applianceState?.fetchedAt ?? "?"}`
+              : "バックエンドから状態を取得できませんでした";
         return (
-          <Tag color={isOn ? "success" : "default"}>
-            {isOn ? "ON" : "OFF"}
-          </Tag>
+          <Tooltip title={tip}>
+            <Tag color={display ? "success" : "default"}>
+              {display ? "ON" : "OFF"}
+            </Tag>
+          </Tooltip>
         );
       },
     },
@@ -188,7 +225,8 @@ export function DeviceDetailPage() {
       key: "control",
       width: 140,
       render: (_: unknown, row: ControlRow) => {
-        const isOn = optimisticState[row.key] ?? row.onAction !== undefined;
+        const display = resolveDisplayState(row);
+        const checked = display === true;
         const isLoading =
           executingId !== null &&
           (executingId === row.onAction?.id || executingId === row.offAction?.id);
@@ -198,7 +236,7 @@ export function DeviceDetailPage() {
             : executingId !== null && !isLoading;
         return (
           <Switch
-            checked={isOn}
+            checked={checked}
             disabled={isDisabled}
             loading={isLoading}
             checkedChildren="ON"
@@ -247,11 +285,19 @@ export function DeviceDetailPage() {
             {(() => {
               const row = controlRows[0];
               if (!row) return <Tag>不明</Tag>;
-              const isOn = optimisticState[row.key] ?? row.onAction !== undefined;
+              const display = resolveDisplayState(row);
+              if (display === "unknown") return <Tag>不明</Tag>;
+              const tip = applianceState?.source === "dry-run"
+                ? "dry-run モード"
+                : applianceState?.source === "tuya"
+                  ? `最終取得: ${applianceState.fetchedAt}`
+                  : applianceState?.error ?? "実機状態";
               return (
-                <Tag color={isOn ? "success" : "default"}>
-                  {isOn ? "ON" : "OFF"}
-                </Tag>
+                <Tooltip title={tip}>
+                  <Tag color={display ? "success" : "default"}>
+                    {display ? "ON" : "OFF"}
+                  </Tag>
+                </Tooltip>
               );
             })()}
           </Descriptions.Item>

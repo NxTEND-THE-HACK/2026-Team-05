@@ -28,6 +28,7 @@ type Store interface {
 	CreateAction(context.Context, domain.CreateActionInput) (domain.Action, error)
 	CreateBinding(context.Context, domain.CreateBindingInput) (domain.MotionBinding, error)
 	ActionByID(context.Context, string) (domain.Action, error)
+	ApplianceByID(context.Context, string) (domain.Appliance, error)
 
 	ClaimDetection(context.Context, domain.DetectionEvent, time.Duration, time.Time) (domain.DetectionClaim, error)
 	AppendLog(context.Context, domain.ActionLog) (domain.ActionLog, error)
