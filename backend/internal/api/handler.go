@@ -35,7 +35,7 @@ func New(repository store.Store, appService *service.Service, logger *slog.Logge
 	e.Use(middleware.BodyLimit("1M"))
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: allowedOrigins,
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodOptions},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
 	}))
 
@@ -53,6 +53,7 @@ func New(repository store.Store, appService *service.Service, logger *slog.Logge
 	api.POST("/actions/:id/execute", h.executeAction)
 	api.GET("/bindings", h.bindings)
 	api.POST("/bindings", h.createBinding)
+	api.DELETE("/bindings/:id", h.deleteBinding)
 	api.GET("/logs", h.logs)
 	return e
 }
@@ -202,6 +203,17 @@ func (h *Handler) createBinding(c echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusCreated, item)
+}
+
+func (h *Handler) deleteBinding(c echo.Context) error {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "id is required")
+	}
+	if err := h.store.DeleteBinding(c.Request().Context(), id); err != nil {
+		return err
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (h *Handler) logs(c echo.Context) error {

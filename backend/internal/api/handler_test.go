@@ -112,6 +112,32 @@ func TestFrontendListResponsesUseExpectedEnvelope(t *testing.T) {
 	}
 }
 
+func TestDeleteBindingEndpointRemovesBinding(t *testing.T) {
+	repository := store.NewMemory(store.DefaultSeed(time.Now()))
+	binding, err := repository.CreateBinding(context.Background(), domain.CreateBindingInput{
+		MotionID: "motion-pose-right-hand-up", ActionID: "action-plug-a-on",
+	})
+	if err != nil {
+		t.Fatalf("CreateBinding() error = %v", err)
+	}
+	server := New(repository, service.New(repository, executor.NewRegistry(&recordingExecutor{}), 0), slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"*"})
+
+	response := performRequest(server, http.MethodDelete, "/api/bindings/"+binding.ID, "")
+	if response.Code != http.StatusNoContent || response.Body.Len() != 0 {
+		t.Fatalf("DELETE response = %d %q, want 204 with empty body", response.Code, response.Body.String())
+	}
+
+	list := performRequest(server, http.MethodGet, "/api/bindings", "")
+	if list.Code != http.StatusOK || strings.Contains(list.Body.String(), binding.ID) {
+		t.Fatalf("GET /api/bindings after delete = %d %s", list.Code, list.Body.String())
+	}
+
+	missing := performRequest(server, http.MethodDelete, "/api/bindings/"+binding.ID, "")
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("DELETE missing binding = %d %s, want 404", missing.Code, missing.Body.String())
+	}
+}
+
 func performRequest(server http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	if body != "" {

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -65,6 +66,30 @@ func TestMemoryCreateBindingUpdatesExistingMotion(t *testing.T) {
 	}
 	if binding.ID != created.ID || binding.CameraID != "demo-camera-2" || binding.ActionID != "action-plug-c-on" {
 		t.Fatalf("binding = %+v, want existing binding updated", binding)
+	}
+}
+
+func TestMemoryDeleteBinding(t *testing.T) {
+	repository := NewMemory(DefaultSeed(time.Now()))
+	binding, err := repository.CreateBinding(context.Background(), domain.CreateBindingInput{
+		MotionID: "motion-pose-right-hand-up", ActionID: "action-plug-a-on",
+	})
+	if err != nil {
+		t.Fatalf("CreateBinding() error = %v", err)
+	}
+
+	if err := repository.DeleteBinding(context.Background(), binding.ID); err != nil {
+		t.Fatalf("DeleteBinding() error = %v", err)
+	}
+	items, err := repository.ListBindings(context.Background())
+	if err != nil {
+		t.Fatalf("ListBindings() error = %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("bindings = %+v, want no bindings", items)
+	}
+	if err := repository.DeleteBinding(context.Background(), binding.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second DeleteBinding() error = %v, want ErrNotFound", err)
 	}
 }
 

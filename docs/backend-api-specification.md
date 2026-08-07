@@ -128,6 +128,7 @@ http://localhost:5173
 | `POST` | `/api/actions/:id/execute` | 家電アクション手動実行 | フロント |
 | `GET` | `/api/bindings` | モーション紐付け一覧 | フロント |
 | `POST` | `/api/bindings` | モーション紐付け作成・更新 | フロント |
+| `DELETE` | `/api/bindings/:id` | モーション紐付け削除 | フロント |
 | `GET` | `/api/logs` | 操作ログ一覧 | フロント |
 
 ## 5. フロントエンド向けAPI
@@ -452,7 +453,20 @@ Content-Type: application/json
 - 更新の場合もHTTPステータスは `201 Created`
 - 更新時はクールダウン状態をリセット
 
-### 5.10 操作ログ一覧取得
+### 5.10 モーション紐付け削除
+
+```http
+DELETE /api/bindings/{id}
+```
+
+指定したバインディングIDの紐付けを削除する。
+
+レスポンス `204 No Content`:
+
+- 対象が存在する場合はボディなしで返す
+- 対象が存在しない場合は `404 Not Found` を返す
+
+### 5.11 操作ログ一覧取得
 
 ```http
 GET /api/logs
@@ -620,7 +634,6 @@ GET /healthz
 - モーションの作成・編集・削除
 - 家電の編集・削除
 - アクションの編集・削除
-- 紐付けの無効化・削除
 - ログのページネーション、期間・ステータス絞り込み
 - WebSocketなどによるリアルタイム通知
 - API認証・認可

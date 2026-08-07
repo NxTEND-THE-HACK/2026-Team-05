@@ -27,6 +27,7 @@ type Store interface {
 	CreateAppliance(context.Context, domain.CreateApplianceInput) (domain.Appliance, error)
 	CreateAction(context.Context, domain.CreateActionInput) (domain.Action, error)
 	CreateBinding(context.Context, domain.CreateBindingInput) (domain.MotionBinding, error)
+	DeleteBinding(context.Context, string) error
 	ActionByID(context.Context, string) (domain.Action, error)
 	ApplianceByID(context.Context, string) (domain.Appliance, error)
 

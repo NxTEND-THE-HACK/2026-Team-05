@@ -243,6 +243,17 @@ func (p *Postgres) CreateBinding(ctx context.Context, input domain.CreateBinding
 	return item, mapPostgresError(err)
 }
 
+func (p *Postgres) DeleteBinding(ctx context.Context, id string) error {
+	tag, err := p.pool.Exec(ctx, `DELETE FROM motion_bindings WHERE id = $1`, id)
+	if err != nil {
+		return mapPostgresError(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (p *Postgres) ActionByID(ctx context.Context, id string) (domain.Action, error) {
 	var item domain.Action
 	err := p.pool.QueryRow(ctx, `SELECT id, appliance_id, name, provider_type, params FROM appliance_actions WHERE id = $1`, id).Scan(&item.ID, &item.ApplianceID, &item.Name, &item.ProviderType, &item.Params)
