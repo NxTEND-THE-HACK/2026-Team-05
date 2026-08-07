@@ -221,6 +221,18 @@ GET /api/motions
       "code": "MOTION_OPEN_TO_FIST_DOWN",
       "name": "パーからグーで下げる",
       "description": "右手をパーからグーにしながら下へ動かす"
+    },
+    {
+      "id": "motion-hand-rotate-right",
+      "code": "MOTION_HAND_ROTATE_RIGHT",
+      "name": "右回し",
+      "description": "右手の手のひらを基準から時計回りに30度以上回す"
+    },
+    {
+      "id": "motion-hand-rotate-left",
+      "code": "MOTION_HAND_ROTATE_LEFT",
+      "name": "左回し",
+      "description": "左手の手のひらを基準から反時計回りに30度以上回す"
     }
   ]
 }
