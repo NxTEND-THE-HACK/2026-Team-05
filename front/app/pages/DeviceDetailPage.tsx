@@ -28,6 +28,10 @@ import {
   isRowToggleable,
   type ControlRow,
 } from "~/lib/controlRows";
+import {
+  reconcileOptimisticState,
+  resolveDisplayStateValue,
+} from "~/lib/displayState";
 import type { MotionBinding, Motion, Action } from "~/types/backendApi";
 
 const { Title, Text } = Typography;
@@ -127,20 +131,32 @@ export function DeviceDetailPage() {
   };
 
   const resolveDisplayState = (row: ControlRow): boolean | "unknown" => {
-    if (optimisticState[row.key] !== undefined) return optimisticState[row.key];
     const rowState = resolveStateForRow(row);
-    if (rowState?.value !== null && rowState?.value !== undefined) {
-      return rowState.value;
-    }
-    return "unknown";
+    return resolveDisplayStateValue({
+      optimistic: optimisticState[row.key],
+      rowState,
+    });
   };
 
-  // applianceState が更新 (=フェッチ完了) するたびに楽観状態をクリアして、
-  // ポーリング結果や invalidate 後の最新値を UI へ反映する。
+
+
+  // applianceState が更新 (=フェッチ完了) するたびに、楽観状態と実機状態が
+  // 一致していれば楽観状態をクリアする。一致していない間は Tuya Cloud への
+  // 反映遅延や物理操作が疑われるため、ユーザが押した結果を最優先で表示し続ける。
+  // こうしないと invalidateQueries が古い値 (=押下前) を返した瞬間に UI が
+  // 1回ずれで先祖返りする。
   useEffect(() => {
     if (dataUpdatedAt === 0) return;
-    setOptimisticState({});
-  }, [dataUpdatedAt]);
+    const actualValues: Record<string, boolean | undefined> = {};
+    for (const row of controlRows) {
+      const rowState = resolveStateForRow(row);
+      actualValues[row.key] =
+        rowState?.value !== null && rowState?.value !== undefined
+          ? rowState.value
+          : undefined;
+    }
+    setOptimisticState((prev) => reconcileOptimisticState(prev, actualValues));
+  }, [dataUpdatedAt, controlRows, applianceState]);
 
   const bindingRows: BindingRow[] = useMemo(() => {
     if (!appliance) return [];
