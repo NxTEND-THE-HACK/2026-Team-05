@@ -278,6 +278,9 @@ export function DeviceDetailPage() {
       <Card>
         <Descriptions column={2} bordered size="small">
           <Descriptions.Item label="Name">{appliance.name}</Descriptions.Item>
+          <Descriptions.Item label="Category">
+            {appliance.category}
+          </Descriptions.Item>
           <Descriptions.Item label="Status">
             {(() => {
               const row = controlRows[0];
@@ -297,9 +300,6 @@ export function DeviceDetailPage() {
                 </Tooltip>
               );
             })()}
-          </Descriptions.Item>
-          <Descriptions.Item label="Category">
-            {appliance.category}
           </Descriptions.Item>
           <Descriptions.Item label="ID">{appliance.id}</Descriptions.Item>
         </Descriptions>
