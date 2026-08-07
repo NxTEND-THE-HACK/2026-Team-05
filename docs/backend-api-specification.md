@@ -185,6 +185,42 @@ GET /api/motions
       "code": "MOTION_FINGER_SNAP",
       "name": "指パッチン",
       "description": "右手を曲げた準備姿勢から人差し指を伸ばす"
+    },
+    {
+      "id": "motion-thumbs-up-move-up",
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "description": "右手を親指上の状態にして上へ動かす"
+    },
+    {
+      "id": "motion-thumbs-down-move-down",
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "description": "右手を親指下の状態にして下へ動かす"
+    },
+    {
+      "id": "motion-clap",
+      "code": "MOTION_CLAP",
+      "name": "拍手",
+      "description": "左右の手を離した状態から近づけて叩く"
+    },
+    {
+      "id": "motion-open-to-fist-down",
+      "code": "MOTION_OPEN_TO_FIST_DOWN",
+      "name": "パーからグーで下げる",
+      "description": "右手をパーからグーにしながら下へ動かす"
+    },
+    {
+      "id": "motion-hand-rotate-right",
+      "code": "MOTION_HAND_ROTATE_RIGHT",
+      "name": "右回し",
+      "description": "右手の手のひらを基準から時計回りに30度以上回す"
+    },
+    {
+      "id": "motion-hand-rotate-left",
+      "code": "MOTION_HAND_ROTATE_LEFT",
+      "name": "左回し",
+      "description": "左手の手のひらを基準から反時計回りに30度以上回す"
     }
   ]
 }

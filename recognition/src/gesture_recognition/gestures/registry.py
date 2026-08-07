@@ -7,6 +7,8 @@ from .engine import GestureEngine
 from .rules import (
     ClapRule,
     FingerSnapRule,
+    HandRotateLeftRule,
+    HandRotateRightRule,
     LeftHandRaisedRule,
     OpenToFistDownRule,
     RightHandRaisedRule,
@@ -28,6 +30,8 @@ def default_rules() -> tuple[GestureRule, ...]:
         ThumbsDownMoveDownRule(),
         ClapRule(),
         OpenToFistDownRule(),
+        HandRotateRightRule(),
+        HandRotateLeftRule(),
     )
 
 

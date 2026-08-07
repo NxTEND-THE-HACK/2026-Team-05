@@ -41,6 +41,8 @@ func DefaultSeed(now time.Time) SeedData {
 			{ID: "motion-thumbs-down-move-down", Code: "MOTION_THUMBS_DOWN_MOVE_DOWN", Name: "Badから下", Description: "右手を親指下の状態にして下へ動かす"},
 			{ID: "motion-clap", Code: "MOTION_CLAP", Name: "拍手", Description: "左右の手を離した状態から近づけて叩く"},
 			{ID: "motion-open-to-fist-down", Code: "MOTION_OPEN_TO_FIST_DOWN", Name: "パーからグーで下げる", Description: "右手をパーからグーにしながら下へ動かす"},
+			{ID: "motion-hand-rotate-right", Code: "MOTION_HAND_ROTATE_RIGHT", Name: "右回し", Description: "右手の手のひらを基準から時計回りに30度以上回す"},
+			{ID: "motion-hand-rotate-left", Code: "MOTION_HAND_ROTATE_LEFT", Name: "左回し", Description: "左手の手のひらを基準から反時計回りに30度以上回す"},
 		},
 		Appliances: []domain.Appliance{
 			{ID: "appliance-plug-a", Name: "スマートプラグA", Category: "スマートプラグ", CreatedAt: now},

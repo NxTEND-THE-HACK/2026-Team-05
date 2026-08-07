@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>モーション判定モニター</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+      background: #101522;
+      color: #eef3ff;
+    }
+    body { margin: 0; padding: 28px; }
+    .shell { max-width: 980px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    h1 { margin: 0; font-size: 30px; }
+    .status { color: #9fb0c9; font-size: 14px; }
+    .safe { margin: 22px 0; padding: 14px 18px; border: 1px solid #2c9a70; border-radius: 12px; background: #123427; color: #b9f4d9; font-weight: 700; }
+    .latest { min-height: 230px; display: grid; place-items: center; text-align: center; border: 1px solid #34415e; border-radius: 18px; background: linear-gradient(135deg, #1e2c4b, #182033); box-shadow: 0 20px 50px #06091288; }
+    .latest.empty { color: #9fb0c9; }
+    .latest-name { font-size: 56px; font-weight: 800; letter-spacing: .02em; }
+    .latest-code { margin-top: 12px; color: #afc2e5; font: 16px ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .confidence { margin-top: 16px; color: #8de1ba; font-size: 20px; font-weight: 700; }
+    section { margin-top: 26px; }
+    h2 { margin: 0 0 12px; font-size: 20px; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; background: #171e2e; }
+    th, td { padding: 13px 16px; border-bottom: 1px solid #29334a; text-align: left; }
+    th { color: #9fb0c9; font-size: 13px; font-weight: 600; }
+    td { font-size: 16px; }
+    td.code, td.confidence { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    td.confidence { color: #8de1ba; font-weight: 700; }
+    .empty-row { color: #9fb0c9; text-align: center; }
+    @media (max-width: 700px) {
+      body { padding: 16px; }
+      header { align-items: flex-start; flex-direction: column; }
+      .latest-name { font-size: 38px; }
+      th, td { padding: 10px 8px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <h1>モーション判定モニター</h1>
+      <div id="status" class="status">接続確認中...</div>
+    </header>
+
+    <div class="safe">家電連携：無効　／　判定結果の表示のみ</div>
+
+    <section id="latest" class="latest empty">
+      <div>
+        <div class="latest-name">判定待ち</div>
+        <div class="latest-code">カメラの前でモーションを行ってください</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>直近の判定</h2>
+      <table>
+        <thead>
+          <tr><th>時刻</th><th>モーション</th><th>コード</th><th>信頼度</th></tr>
+        </thead>
+        <tbody id="history"><tr><td colspan="4" class="empty-row">まだ判定はありません</td></tr></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    const stateUrl = "/data/monitor_detections_live.json";
+    const statusElement = document.getElementById("status");
+    const latestElement = document.getElementById("latest");
+    const historyElement = document.getElementById("history");
+
+    function time(value) {
+      return new Date(value).toLocaleTimeString("ja-JP", {hour12: false});
+    }
+
+    function render(state) {
+      statusElement.textContent = state.status === "running"
+        ? `判定中　最終更新 ${time(state.updated_at)}`
+        : `モニター停止中　最終更新 ${time(state.updated_at)}`;
+
+      if (state.latest) {
+        const latest = state.latest;
+        latestElement.className = "latest";
+        latestElement.innerHTML = `
+          <div>
+            <div class="latest-name"></div>
+            <div class="latest-code"></div>
+            <div class="confidence"></div>
+          </div>`;
+        latestElement.querySelector(".latest-name").textContent = latest.name;
+        latestElement.querySelector(".latest-code").textContent = `${time(latest.captured_at)}　${latest.motion_code}`;
+        latestElement.querySelector(".confidence").textContent = `信頼度 ${(latest.confidence * 100).toFixed(0)}%`;
+      }
+
+      historyElement.replaceChildren();
+      if (!state.history || state.history.length === 0) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td colspan="4" class="empty-row">まだ判定はありません</td>';
+        historyElement.appendChild(row);
+        return;
+      }
+      for (const item of state.history) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td></td><td></td><td class="code"></td><td class="confidence"></td>';
+        row.children[0].textContent = time(item.captured_at);
+        row.children[1].textContent = item.name;
+        row.children[2].textContent = item.motion_code;
+        row.children[3].textContent = `${(item.confidence * 100).toFixed(0)}%`;
+        historyElement.appendChild(row);
+      }
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch(`${stateUrl}?t=${Date.now()}`, {cache: "no-store"});
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        render(await response.json());
+      } catch (error) {
+        statusElement.textContent = "判定モニターへ接続できません";
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 500);
+  </script>
+</body>
+</html>

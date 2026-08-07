@@ -118,6 +118,8 @@ func TestMemorySeedContainsEveryRecognitionMotion(t *testing.T) {
 		"MOTION_THUMBS_DOWN_MOVE_DOWN": false,
 		"MOTION_CLAP": false,
 		"MOTION_OPEN_TO_FIST_DOWN": false,
+		"MOTION_HAND_ROTATE_RIGHT": false,
+		"MOTION_HAND_ROTATE_LEFT": false,
 	}
 	for _, motion := range motions {
 		if _, ok := want[motion.Code]; ok {
