@@ -12,13 +12,20 @@ export interface ApplianceState {
   fetchedAt: string;
 }
 
+export interface UseApplianceStateResult {
+  data: ApplianceState | undefined;
+  isLoading: boolean;
+  /** 最後にフェッチが完了した時刻 (ms epoch)。値が変わるたび invalidate / 再フェッチを検知できる。 */
+  dataUpdatedAt: number;
+}
+
 /**
  * 単一 appliance の現在状態をバックエンド経由で取得する。
  * refetchInterval で 30 秒ごとにポーリングし、Tuya 側や物理スイッチの変更を UI へ反映する。
  * dry-run モードでは source="dry-run" + value=null が返る。
  */
-export function useApplianceState(applianceId: string | undefined) {
-  return useQuery({
+export function useApplianceState(applianceId: string | undefined): UseApplianceStateResult {
+  const query = useQuery({
     queryKey: queryKeys.applianceState(applianceId ?? "_"),
     enabled: Boolean(applianceId),
     refetchInterval: 30_000,
@@ -30,4 +37,9 @@ export function useApplianceState(applianceId: string | undefined) {
       return data;
     },
   });
+  return {
+    data: query.data,
+    isLoading: query.isLoading,
+    dataUpdatedAt: query.dataUpdatedAt,
+  };
 }

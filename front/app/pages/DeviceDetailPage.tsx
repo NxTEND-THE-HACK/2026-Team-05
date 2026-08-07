@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Card,
   Descriptions,
@@ -23,6 +23,11 @@ import { useMotions } from "~/hooks/useMotions";
 import { useExecuteAction } from "~/hooks/useExecuteAction";
 import { useApplianceState } from "~/hooks/useApplianceState";
 import { queryKeys } from "~/hooks/queryKeys";
+import {
+  groupActionsIntoRows,
+  isRowToggleable,
+  type ControlRow,
+} from "~/lib/controlRows";
 import type { MotionBinding, Motion, Action } from "~/types/backendApi";
 
 const { Title, Text } = Typography;
@@ -32,33 +37,6 @@ interface BindingRow {
   binding: MotionBinding;
   motion?: Motion;
   action?: Action;
-}
-
-interface ControlRow {
-  key: string;
-  name: string;
-  onAction?: Action;
-  offAction?: Action;
-}
-
-/**
- * 1つの appliance に紐づく Action 群を、value=true / value=false のペアに集約する。
- * 同じ appliance 内に on/off 両方の Action がある場合のみトグル行を生成し、
- * 片方しか存在しない Action は対応する側だけを持った単一行として扱う。
- */
-function groupActionsIntoRows(actions: Action[]): ControlRow[] {
-  const groups = new Map<string, ControlRow>();
-  for (const a of actions) {
-    const row = groups.get(a.applianceId) ?? {
-      key: a.applianceId,
-      name: a.name.replace(/\s*(ON|OFF|オン|オフ)\s*$/i, "").trim() || a.name,
-    };
-    if (a.params.value === true) row.onAction = a;
-    else if (a.params.value === false) row.offAction = a;
-    else row.onAction = a; // value が無いものはとりあえず on 側に振り分けて単発実行可能にする
-    groups.set(a.applianceId, row);
-  }
-  return Array.from(groups.values());
 }
 
 const bindingColumns: ColumnsType<BindingRow> = [
@@ -122,20 +100,33 @@ export function DeviceDetailPage() {
   const [optimisticState, setOptimisticState] = useState<Record<string, boolean>>({});
 
   // バックエンドから実機状態を取得 (Tuya 経由 / dry-run 時は null)。
-  // optimisticState があればそれを優先し、無ければ API 結果、それも無ければ
-  // ON アクション存在可否で暫定表示する。
-  const { data: applianceState, isLoading: applianceStateLoading } =
+  // 表示は次の優先順:
+  //   1) optimisticState (直前のトグル操作の即時反映)
+  //   2) applianceState.value (バックエンドが返した実機の値)
+  //   3) "unknown" (値不明)
+  // optimisticState は applianceState が更新されるたびにクリアし、Tuya 側の
+  // 物理操作やポーリング結果が常に最優先で反映されるようにする。
+  const { data: applianceState, isLoading: applianceStateLoading, dataUpdatedAt } =
     useApplianceState(deviceId);
 
   const resolveDisplayState = (row: ControlRow): boolean | "unknown" => {
     if (optimisticState[row.key] !== undefined) return optimisticState[row.key];
-    if (applianceState?.value !== undefined && applianceState.value !== null) {
+    if (
+      applianceState &&
+      applianceState.value !== null &&
+      applianceState.value !== undefined
+    ) {
       return applianceState.value;
     }
-    if (row.onAction !== undefined) return true;
-    if (row.offAction !== undefined) return false;
     return "unknown";
   };
+
+  // applianceState が更新 (=フェッチ完了) するたびに楽観状態をクリアして、
+  // ポーリング結果や invalidate 後の最新値を UI へ反映する。
+  useEffect(() => {
+    if (dataUpdatedAt === 0) return;
+    setOptimisticState({});
+  }, [dataUpdatedAt]);
 
   const bindingRows: BindingRow[] = useMemo(() => {
     if (!appliance) return [];
@@ -154,12 +145,18 @@ export function DeviceDetailPage() {
   }, [appliance, bindings, actions, motions]);
 
   const handleToggle = async (row: ControlRow, next: boolean) => {
-    // next=true → ON 側の Action を実行、next=false → OFF 側の Action を実行。
-    // 片側しか存在しない場合は存在する方を実行する。
-    const target =
-      next ? row.onAction ?? row.offAction : row.offAction ?? row.onAction;
+    // 両方向の Action が揃っていない行はトグル不可。UI 側でも disabled にしているが、
+    // 念のためここでも防御する。
+    if (!isRowToggleable(row)) {
+      message.warning(
+        `${row.name} は ON/OFF 両方のアクションが揃っていないため操作できません`,
+      );
+      return;
+    }
+    // next と一致する方向の Action を厳密に選ぶ。存在しなければエラー。
+    const target = next ? row.onAction : row.offAction;
     if (!target) {
-      message.error(`${row.name} に実行可能なアクションがありません`);
+      message.error(`${row.name} の ${next ? "ON" : "OFF"} アクションが見つかりません`);
       return;
     }
     setExecutingId(target.id);
@@ -168,7 +165,8 @@ export function DeviceDetailPage() {
       if (result.success) {
         setOptimisticState((prev) => ({ ...prev, [row.key]: next }));
         // バックエンド側の最新状態を即時取り直す。成功時の偽陽性や
-        // Tuya 側の遅延反映もここで吸収する。
+        // Tuya 側の遅延反映もここで吸収する。invalidate 完了時に useEffect が
+        // optimisticState をクリアするため、ポーリングや物理操作にも追従する。
         queryClient.invalidateQueries({
           queryKey: queryKeys.applianceState(row.key),
         });
@@ -226,23 +224,32 @@ export function DeviceDetailPage() {
       width: 140,
       render: (_: unknown, row: ControlRow) => {
         const display = resolveDisplayState(row);
+        // 不明状態 (value=null / 未取得) は checked を false に固定して、
+        // 見た目上 ON と OFF のどちらでもない状態を作る。トグル操作で
+        // ON へ倒すと ON Action が走り、OFF Action は未実行のため状態は遷移する。
         const checked = display === true;
+        const toggleable = isRowToggleable(row);
         const isLoading =
           executingId !== null &&
           (executingId === row.onAction?.id || executingId === row.offAction?.id);
-        const isDisabled =
-          !row.onAction && !row.offAction
-            ? true
-            : executingId !== null && !isLoading;
+        const isDisabled = !toggleable || (executingId !== null && !isLoading);
         return (
-          <Switch
-            checked={checked}
-            disabled={isDisabled}
-            loading={isLoading}
-            checkedChildren="ON"
-            unCheckedChildren="OFF"
-            onChange={(checked) => handleToggle(row, checked)}
-          />
+          <Tooltip
+            title={
+              toggleable
+                ? undefined
+                : "ON/OFF 両方のアクションが揃っていないため操作できません"
+            }
+          >
+            <Switch
+              checked={checked}
+              disabled={isDisabled}
+              loading={isLoading}
+              checkedChildren="ON"
+              unCheckedChildren="OFF"
+              onChange={(checked) => handleToggle(row, checked)}
+            />
+          </Tooltip>
         );
       },
     },
