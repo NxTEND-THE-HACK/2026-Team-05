@@ -30,16 +30,29 @@ type ExecuteResult struct {
 	Message string `json:"message,omitempty"`
 }
 
+// ApplianceSwitchState は appliance に紐づく1つの switchCode の現在状態。
+// value が確定できない場合は nil (unknown) になる。
+type ApplianceSwitchState struct {
+	SwitchCode string `json:"switchCode"`
+	Online     bool   `json:"online"`
+	Value      *bool  `json:"value"`
+	Source     string `json:"source"`
+	Error      string `json:"error,omitempty"`
+}
+
 // ApplianceState は device の現在状態。value が確定できない場合は nil (unknown)。
 // Source は "tuya" / "dry-run" / "no-action" など状態取得の根拠を返す。
+// States には switchCode ごとの状態を保持し、既存クライアント向けに
+// 1件だけの場合は従来のトップレベルフィールドにも同じ値を設定する。
 type ApplianceState struct {
-	ApplianceID string `json:"applianceId"`
-	Online      bool   `json:"online"`
-	Value       *bool  `json:"value"`
-	SwitchCode  string `json:"switchCode"`
-	Source      string `json:"source"`
-	Error       string `json:"error,omitempty"`
-	FetchedAt   string `json:"fetchedAt"`
+	ApplianceID string                 `json:"applianceId"`
+	Online      bool                   `json:"online"`
+	Value       *bool                  `json:"value"`
+	SwitchCode  string                 `json:"switchCode"`
+	Source      string                 `json:"source"`
+	Error       string                 `json:"error,omitempty"`
+	FetchedAt   string                 `json:"fetchedAt"`
+	States      []ApplianceSwitchState `json:"states,omitempty"`
 }
 
 func New(repository store.Store, registry *executor.Registry, cooldown time.Duration) *Service {
@@ -114,10 +127,10 @@ func (s *Service) CreateAction(ctx context.Context, input domain.CreateActionInp
 	return s.store.CreateAction(ctx, input)
 }
 
-// GetApplianceState は appliance に紐づく Action のうち device ID を解決できるものを
-// 1つ選んで provider (Tuya) へ問い合わせ、ON/OFF 状態を返す。
+// GetApplianceState は appliance に紐づく Action から device ID / switch code を解決し、
+// switchCode ごとに provider (Tuya) へ問い合わせて状態を返す。
 // 1つも Action が無い、または deviceId を解決できない場合は value=nil, source="no-action" を返す。
-// dry-run モードでは ErrDryRun を検知して source="dry-run" を返す。
+// dry-run モードでは各 switchCode を source="dry-run" として返す。
 func (s *Service) GetApplianceState(ctx context.Context, applianceID string) (ApplianceState, error) {
 	now := s.now().UTC().Format(time.RFC3339)
 	state := ApplianceState{ApplianceID: applianceID, FetchedAt: now}
@@ -129,7 +142,13 @@ func (s *Service) GetApplianceState(ctx context.Context, applianceID string) (Ap
 		state.Source = "no-action"
 		return state, nil
 	}
-	var resolved *executor.DeviceState
+	type stateTarget struct {
+		deviceID   string
+		switchCode string
+		provider   domain.ProviderType
+	}
+	targets := make([]stateTarget, 0, len(actions))
+	seenTargets := make(map[string]struct{}, len(actions))
 	var lastErr error
 	for _, a := range actions {
 		deviceID, switchCode, err := s.executor.ResolveDevice(a)
@@ -137,28 +156,86 @@ func (s *Service) GetApplianceState(ctx context.Context, applianceID string) (Ap
 			lastErr = err
 			continue
 		}
-		ds, err := s.executor.GetDeviceState(ctx, deviceID, switchCode, a.ProviderType)
-		if err == nil {
-			resolved = &ds
-			break
+		target := stateTarget{deviceID: deviceID, switchCode: switchCode, provider: a.ProviderType}
+		targetKey := string(target.provider) + "\x00" + target.deviceID + "\x00" + target.switchCode
+		if _, seen := seenTargets[targetKey]; seen {
+			continue
 		}
-		// dry-run は致命ではないので特別な source を立てて次を試す。
-		if errors.Is(err, executor.ErrDryRun) {
-			state.Source = "dry-run"
-			return state, nil
-		}
-		lastErr = err
+		seenTargets[targetKey] = struct{}{}
+		targets = append(targets, target)
 	}
-	if resolved == nil {
+	if len(targets) == 0 {
 		if lastErr != nil {
+			state.Error = lastErr.Error()
 			return state, lastErr
 		}
 		state.Source = "no-action"
 		return state, nil
 	}
-	state.Online = resolved.Online
-	state.SwitchCode = resolved.SwitchCode
-	state.Value = resolved.Value
-	state.Source = "tuya"
+
+	for _, target := range targets {
+		ds, err := s.executor.GetDeviceState(ctx, target.deviceID, target.switchCode, target.provider)
+		if err == nil {
+			state.States = append(state.States, ApplianceSwitchState{
+				SwitchCode: ds.SwitchCode,
+				Online:     ds.Online,
+				Value:      ds.Value,
+				Source:     "tuya",
+			})
+			continue
+		}
+		// dry-run は致命ではないので、対象ごとに「不明」として返して次を試す。
+		if errors.Is(err, executor.ErrDryRun) {
+			state.States = append(state.States, ApplianceSwitchState{
+				SwitchCode: target.switchCode,
+				Source:     "dry-run",
+			})
+			continue
+		}
+		lastErr = err
+		state.States = append(state.States, ApplianceSwitchState{
+			SwitchCode: target.switchCode,
+			Source:     "error",
+			Error:      err.Error(),
+		})
+	}
+
+	if len(state.States) == 1 {
+		state.Online = state.States[0].Online
+		state.SwitchCode = state.States[0].SwitchCode
+		state.Value = state.States[0].Value
+		state.Source = state.States[0].Source
+		state.Error = state.States[0].Error
+	} else {
+		state.Source = summarizeStateSources(state.States)
+	}
+	if lastErr != nil {
+		state.Error = lastErr.Error()
+	}
+	if len(state.States) > 0 && allStatesFailed(state.States) && lastErr != nil {
+		return state, lastErr
+	}
 	return state, nil
+}
+
+func summarizeStateSources(states []ApplianceSwitchState) string {
+	if len(states) == 0 {
+		return "no-action"
+	}
+	source := states[0].Source
+	for _, item := range states[1:] {
+		if item.Source != source {
+			return "mixed"
+		}
+	}
+	return source
+}
+
+func allStatesFailed(states []ApplianceSwitchState) bool {
+	for _, state := range states {
+		if state.Source != "error" {
+			return false
+		}
+	}
+	return len(states) > 0
 }

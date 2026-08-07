@@ -10,6 +10,15 @@ export interface ApplianceState {
   source: "tuya" | "dry-run" | "no-action" | string;
   error?: string;
   fetchedAt: string;
+  states?: ApplianceSwitchState[];
+}
+
+export interface ApplianceSwitchState {
+  switchCode: string;
+  online: boolean;
+  value: boolean | null;
+  source: "tuya" | "dry-run" | "error" | string;
+  error?: string;
 }
 
 export interface UseApplianceStateResult {

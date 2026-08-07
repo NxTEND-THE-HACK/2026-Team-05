@@ -109,14 +109,28 @@ export function DeviceDetailPage() {
   const { data: applianceState, isLoading: applianceStateLoading, dataUpdatedAt } =
     useApplianceState(deviceId);
 
+  const resolveStateForRow = (row: ControlRow) => {
+    if (!applianceState) return undefined;
+    // 新しいレスポンスは switchCode ごとの states を優先する。
+    // states がない旧レスポンスにも対応するため、配列が空の場合だけ
+    // 従来のトップレベル状態へフォールバックする。
+    if (applianceState.states?.length) {
+      const switchCode =
+        row.onAction?.params.switchCode?.trim() ||
+        row.offAction?.params.switchCode?.trim() ||
+        "switch";
+      return applianceState.states.find(
+        (item) => item.switchCode === switchCode,
+      );
+    }
+    return applianceState;
+  };
+
   const resolveDisplayState = (row: ControlRow): boolean | "unknown" => {
     if (optimisticState[row.key] !== undefined) return optimisticState[row.key];
-    if (
-      applianceState &&
-      applianceState.value !== null &&
-      applianceState.value !== undefined
-    ) {
-      return applianceState.value;
+    const rowState = resolveStateForRow(row);
+    if (rowState?.value !== null && rowState?.value !== undefined) {
+      return rowState.value;
     }
     return "unknown";
   };
@@ -167,9 +181,11 @@ export function DeviceDetailPage() {
         // バックエンド側の最新状態を即時取り直す。成功時の偽陽性や
         // Tuya 側の遅延反映もここで吸収する。invalidate 完了時に useEffect が
         // optimisticState をクリアするため、ポーリングや物理操作にも追従する。
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.applianceState(row.key),
-        });
+        if (deviceId) {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.applianceState(deviceId),
+          });
+        }
         message.success(
           `「${row.name}」を${next ? "ON" : "OFF"}にしました`,
         );
@@ -200,10 +216,13 @@ export function DeviceDetailPage() {
       width: 120,
       render: (_: unknown, row: ControlRow) => {
         const display = resolveDisplayState(row);
+        const rowState = resolveStateForRow(row);
         if (display === "unknown") return <Tag>不明</Tag>;
-        const source = applianceState?.source;
+        const source = rowState?.source;
         const tip = applianceStateLoading
           ? "実機状態を取得中"
+          : rowState?.error
+            ? rowState.error
           : source === "dry-run"
             ? "dry-run モード: 実機状態は取得できません"
             : source === "tuya"
@@ -246,7 +265,7 @@ export function DeviceDetailPage() {
               disabled={isDisabled}
               loading={isLoading}
               checkedChildren="ON"
-              unCheckedChildren="OFF"
+              unCheckedChildren={display === "unknown" ? "?" : "OFF"}
               onChange={(checked) => handleToggle(row, checked)}
             />
           </Tooltip>
@@ -293,12 +312,13 @@ export function DeviceDetailPage() {
               const row = controlRows[0];
               if (!row) return <Tag>不明</Tag>;
               const display = resolveDisplayState(row);
+              const rowState = resolveStateForRow(row);
               if (display === "unknown") return <Tag>不明</Tag>;
-              const tip = applianceState?.source === "dry-run"
+              const tip = rowState?.source === "dry-run"
                 ? "dry-run モード"
-                : applianceState?.source === "tuya"
-                  ? `最終取得: ${applianceState.fetchedAt}`
-                  : applianceState?.error ?? "実機状態";
+                : rowState?.source === "tuya"
+                  ? `最終取得: ${applianceState?.fetchedAt ?? "?"}`
+                  : rowState?.error ?? "実機状態";
               return (
                 <Tooltip title={tip}>
                   <Tag color={display ? "success" : "default"}>
