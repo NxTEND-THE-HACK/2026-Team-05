@@ -1,21 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Button,
   Card,
   Descriptions,
   Result,
   Space,
   Spin,
+  Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  PoweroffOutlined,
-  ThunderboltOutlined,
-} from "@ant-design/icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router";
 import { BackToDashboard } from "~/components/common/BackToDashboard";
 import { useAppliances } from "~/hooks/useAppliances";
@@ -23,6 +21,13 @@ import { useBindings } from "~/hooks/useBindings";
 import { useActions } from "~/hooks/useActions";
 import { useMotions } from "~/hooks/useMotions";
 import { useExecuteAction } from "~/hooks/useExecuteAction";
+import { useApplianceState } from "~/hooks/useApplianceState";
+import { queryKeys } from "~/hooks/queryKeys";
+import {
+  groupActionsIntoRows,
+  isRowToggleable,
+  type ControlRow,
+} from "~/lib/controlRows";
 import type { MotionBinding, Motion, Action } from "~/types/backendApi";
 
 const { Title, Text } = Typography;
@@ -68,6 +73,7 @@ export function DeviceDetailPage() {
     useActions(deviceId);
   const { data: motions = [], isLoading: motionsLoading } = useMotions();
   const executeAction = useExecuteAction();
+  const queryClient = useQueryClient();
   const [executingId, setExecutingId] = useState<string | null>(null);
 
   const loading =
@@ -79,16 +85,62 @@ export function DeviceDetailPage() {
   );
 
   const deviceActions = useMemo(
-    () =>
-      actions.filter((a) => a.applianceId === appliance?.id).sort((a, b) => {
-        // Prefer ON before OFF when value is known
-        const av = a.params.value === true ? 0 : a.params.value === false ? 1 : 2;
-        const bv = b.params.value === true ? 0 : b.params.value === false ? 1 : 2;
-        if (av !== bv) return av - bv;
-        return a.name.localeCompare(b.name);
-      }),
+    () => actions.filter((a) => a.applianceId === appliance?.id),
     [actions, appliance?.id],
   );
+
+  const controlRows = useMemo<ControlRow[]>(
+    () => groupActionsIntoRows(deviceActions),
+    [deviceActions],
+  );
+
+  // 行ごとに「直前に実行した結果が on かどうか」を覚えておく楽観的状態。
+  // 未実行時は undefined とし、ON 側の Action が存在すれば on 扱い (ON アクションの
+  // デフォルト起動起点) とする。値が存在しない場合は OFF として扱う。
+  const [optimisticState, setOptimisticState] = useState<Record<string, boolean>>({});
+
+  // バックエンドから実機状態を取得 (Tuya 経由 / dry-run 時は null)。
+  // 表示は次の優先順:
+  //   1) optimisticState (直前のトグル操作の即時反映)
+  //   2) applianceState.value (バックエンドが返した実機の値)
+  //   3) "unknown" (値不明)
+  // optimisticState は applianceState が更新されるたびにクリアし、Tuya 側の
+  // 物理操作やポーリング結果が常に最優先で反映されるようにする。
+  const { data: applianceState, isLoading: applianceStateLoading, dataUpdatedAt } =
+    useApplianceState(deviceId);
+
+  const resolveStateForRow = (row: ControlRow) => {
+    if (!applianceState) return undefined;
+    // 新しいレスポンスは switchCode ごとの states を優先する。
+    // states がない旧レスポンスにも対応するため、配列が空の場合だけ
+    // 従来のトップレベル状態へフォールバックする。
+    if (applianceState.states?.length) {
+      const switchCode =
+        row.onAction?.params.switchCode?.trim() ||
+        row.offAction?.params.switchCode?.trim() ||
+        "switch";
+      return applianceState.states.find(
+        (item) => item.switchCode === switchCode,
+      );
+    }
+    return applianceState;
+  };
+
+  const resolveDisplayState = (row: ControlRow): boolean | "unknown" => {
+    if (optimisticState[row.key] !== undefined) return optimisticState[row.key];
+    const rowState = resolveStateForRow(row);
+    if (rowState?.value !== null && rowState?.value !== undefined) {
+      return rowState.value;
+    }
+    return "unknown";
+  };
+
+  // applianceState が更新 (=フェッチ完了) するたびに楽観状態をクリアして、
+  // ポーリング結果や invalidate 後の最新値を UI へ反映する。
+  useEffect(() => {
+    if (dataUpdatedAt === 0) return;
+    setOptimisticState({});
+  }, [dataUpdatedAt]);
 
   const bindingRows: BindingRow[] = useMemo(() => {
     if (!appliance) return [];
@@ -106,17 +158,42 @@ export function DeviceDetailPage() {
     return rows;
   }, [appliance, bindings, actions, motions]);
 
-  const handleExecute = async (action: Action) => {
-    setExecutingId(action.id);
+  const handleToggle = async (row: ControlRow, next: boolean) => {
+    // 両方向の Action が揃っていない行はトグル不可。UI 側でも disabled にしているが、
+    // 念のためここでも防御する。
+    if (!isRowToggleable(row)) {
+      message.warning(
+        `${row.name} は ON/OFF 両方のアクションが揃っていないため操作できません`,
+      );
+      return;
+    }
+    // next と一致する方向の Action を厳密に選ぶ。存在しなければエラー。
+    const target = next ? row.onAction : row.offAction;
+    if (!target) {
+      message.error(`${row.name} の ${next ? "ON" : "OFF"} アクションが見つかりません`);
+      return;
+    }
+    setExecutingId(target.id);
     try {
-      const result = await executeAction.mutateAsync(action.id);
+      const result = await executeAction.mutateAsync(target.id);
       if (result.success) {
-        message.success(`「${action.name}」を実行しました`);
+        setOptimisticState((prev) => ({ ...prev, [row.key]: next }));
+        // バックエンド側の最新状態を即時取り直す。成功時の偽陽性や
+        // Tuya 側の遅延反映もここで吸収する。invalidate 完了時に useEffect が
+        // optimisticState をクリアするため、ポーリングや物理操作にも追従する。
+        if (deviceId) {
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.applianceState(deviceId),
+          });
+        }
+        message.success(
+          `「${row.name}」を${next ? "ON" : "OFF"}にしました`,
+        );
       } else {
         message.error(
           result.message
             ? `実行失敗: ${result.message}`
-            : `「${action.name}」の実行に失敗しました`,
+            : `「${row.name}」の実行に失敗しました`,
         );
       }
     } catch (err) {
@@ -127,45 +204,71 @@ export function DeviceDetailPage() {
     }
   };
 
-  const actionColumns: ColumnsType<Action> = [
+  const actionColumns: ColumnsType<ControlRow> = [
     {
-      title: "Action",
+      title: "Appliance",
       dataIndex: "name",
       key: "name",
     },
     {
-      title: "Type",
-      key: "type",
+      title: "Status",
+      key: "status",
       width: 120,
-      render: (_: unknown, action: Action) => {
-        if (action.params.value === true) {
-          return <Tag color="success">ON</Tag>;
-        }
-        if (action.params.value === false) {
-          return <Tag color="default">OFF</Tag>;
-        }
-        return <Tag>OTHER</Tag>;
+      render: (_: unknown, row: ControlRow) => {
+        const display = resolveDisplayState(row);
+        const rowState = resolveStateForRow(row);
+        if (display === "unknown") return <Tag>不明</Tag>;
+        const source = rowState?.source;
+        const tip = applianceStateLoading
+          ? "実機状態を取得中"
+          : rowState?.error
+            ? rowState.error
+          : source === "dry-run"
+            ? "dry-run モード: 実機状態は取得できません"
+            : source === "tuya"
+              ? `最終取得: ${applianceState?.fetchedAt ?? "?"}`
+              : "バックエンドから状態を取得できませんでした";
+        return (
+          <Tooltip title={tip}>
+            <Tag color={display ? "success" : "default"}>
+              {display ? "ON" : "OFF"}
+            </Tag>
+          </Tooltip>
+        );
       },
     },
     {
       title: "Control",
       key: "control",
       width: 140,
-      render: (_: unknown, action: Action) => {
-        const isOn = action.params.value === true;
-        const isOff = action.params.value === false;
+      render: (_: unknown, row: ControlRow) => {
+        const display = resolveDisplayState(row);
+        // 不明状態 (value=null / 未取得) は checked を false に固定して、
+        // 見た目上 ON と OFF のどちらでもない状態を作る。トグル操作で
+        // ON へ倒すと ON Action が走り、OFF Action は未実行のため状態は遷移する。
+        const checked = display === true;
+        const toggleable = isRowToggleable(row);
+        const isLoading =
+          executingId !== null &&
+          (executingId === row.onAction?.id || executingId === row.offAction?.id);
+        const isDisabled = !toggleable || (executingId !== null && !isLoading);
         return (
-          <Button
-            type={isOn ? "primary" : isOff ? "default" : "primary"}
-            danger={isOff}
-            size="small"
-            icon={isOn ? <ThunderboltOutlined /> : <PoweroffOutlined />}
-            loading={executingId === action.id}
-            disabled={executingId !== null && executingId !== action.id}
-            onClick={() => handleExecute(action)}
+          <Tooltip
+            title={
+              toggleable
+                ? undefined
+                : "ON/OFF 両方のアクションが揃っていないため操作できません"
+            }
           >
-            {isOn ? "ON" : isOff ? "OFF" : "実行"}
-          </Button>
+            <Switch
+              checked={checked}
+              disabled={isDisabled}
+              loading={isLoading}
+              checkedChildren="ON"
+              unCheckedChildren={display === "unknown" ? "?" : "OFF"}
+              onChange={(checked) => handleToggle(row, checked)}
+            />
+          </Tooltip>
         );
       },
     },
@@ -205,7 +308,25 @@ export function DeviceDetailPage() {
             {appliance.category}
           </Descriptions.Item>
           <Descriptions.Item label="Status">
-            <Tag color="success">オンライン</Tag>
+            {(() => {
+              const row = controlRows[0];
+              if (!row) return <Tag>不明</Tag>;
+              const display = resolveDisplayState(row);
+              const rowState = resolveStateForRow(row);
+              if (display === "unknown") return <Tag>不明</Tag>;
+              const tip = rowState?.source === "dry-run"
+                ? "dry-run モード"
+                : rowState?.source === "tuya"
+                  ? `最終取得: ${applianceState?.fetchedAt ?? "?"}`
+                  : rowState?.error ?? "実機状態";
+              return (
+                <Tooltip title={tip}>
+                  <Tag color={display ? "success" : "default"}>
+                    {display ? "ON" : "OFF"}
+                  </Tag>
+                </Tooltip>
+              );
+            })()}
           </Descriptions.Item>
           <Descriptions.Item label="ID">{appliance.id}</Descriptions.Item>
         </Descriptions>
@@ -221,8 +342,8 @@ export function DeviceDetailPage() {
       >
         <Table
           columns={actionColumns}
-          dataSource={deviceActions}
-          rowKey="id"
+          dataSource={controlRows}
+          rowKey="key"
           pagination={false}
           size="middle"
           locale={{

@@ -252,6 +252,15 @@ func (p *Postgres) ActionByID(ctx context.Context, id string) (domain.Action, er
 	return item, err
 }
 
+func (p *Postgres) ApplianceByID(ctx context.Context, id string) (domain.Appliance, error) {
+	var item domain.Appliance
+	err := p.pool.QueryRow(ctx, `SELECT id, name, category, created_at FROM appliances WHERE id = $1`, id).Scan(&item.ID, &item.Name, &item.Category, &item.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Appliance{}, ErrNotFound
+	}
+	return item, err
+}
+
 func (p *Postgres) ClaimDetection(ctx context.Context, event domain.DetectionEvent, cooldown time.Duration, now time.Time) (domain.DetectionClaim, error) {
 	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
