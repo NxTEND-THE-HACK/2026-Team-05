@@ -32,7 +32,7 @@ const columns: ColumnsType<ActionLog> = [
     dataIndex: "actionName",
     key: "action",
     render: (_: string | undefined, record: ActionLog) =>
-      record.actionName ?? (record.actionId ? "—" : "—"),
+      record.actionName ?? record.actionId ?? "—",
   },
   {
     title: "Camera",

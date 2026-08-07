@@ -34,7 +34,7 @@ export interface Action {
     deviceId?: string;
     deviceIdEnv?: "PLUG_A_ID" | "PLUG_B_ID" | "PLUG_C_ID";
     switchCode?: string;
-    value: boolean;
+    value?: boolean;
   };
 }
 

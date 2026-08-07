@@ -112,7 +112,9 @@ export function LogsPage() {
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="Confidence">—</Descriptions.Item>
-            <Descriptions.Item label="Error Message">—</Descriptions.Item>
+            <Descriptions.Item label="Error Message">
+              {selectedLog.errorMessage ?? "—"}
+            </Descriptions.Item>
             <Descriptions.Item label="Detected At">
               {dayjs(selectedLog.detectedAt).format("YYYY/MM/DD HH:mm:ss")}
             </Descriptions.Item>

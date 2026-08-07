@@ -83,7 +83,7 @@ export function BindingsPage() {
       ),
     },
     {
-      title: "Binded Motion",
+      title: "Bound Motion",
       key: "motion",
       render: (_: unknown, row: BindingRow) =>
         row.motion?.name ?? row.binding.motionId,

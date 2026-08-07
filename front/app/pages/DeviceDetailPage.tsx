@@ -232,7 +232,7 @@ export function DeviceDetailPage() {
         />
       </Card>
 
-      <Card title="Binded Motions">
+      <Card title="Bound Motions">
         <Table
           columns={bindingColumns}
           dataSource={bindingRows}
