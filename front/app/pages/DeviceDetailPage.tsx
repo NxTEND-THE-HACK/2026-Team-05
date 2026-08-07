@@ -1,21 +1,17 @@
 import { useMemo, useState } from "react";
 import {
-  Button,
   Card,
   Descriptions,
   Result,
   Space,
   Spin,
+  Switch,
   Table,
   Tag,
   Typography,
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  PoweroffOutlined,
-  ThunderboltOutlined,
-} from "@ant-design/icons";
 import { useParams } from "react-router";
 import { BackToDashboard } from "~/components/common/BackToDashboard";
 import { useAppliances } from "~/hooks/useAppliances";
@@ -32,6 +28,33 @@ interface BindingRow {
   binding: MotionBinding;
   motion?: Motion;
   action?: Action;
+}
+
+interface ControlRow {
+  key: string;
+  name: string;
+  onAction?: Action;
+  offAction?: Action;
+}
+
+/**
+ * 1つの appliance に紐づく Action 群を、value=true / value=false のペアに集約する。
+ * 同じ appliance 内に on/off 両方の Action がある場合のみトグル行を生成し、
+ * 片方しか存在しない Action は対応する側だけを持った単一行として扱う。
+ */
+function groupActionsIntoRows(actions: Action[]): ControlRow[] {
+  const groups = new Map<string, ControlRow>();
+  for (const a of actions) {
+    const row = groups.get(a.applianceId) ?? {
+      key: a.applianceId,
+      name: a.name.replace(/\s*(ON|OFF|オン|オフ)\s*$/i, "").trim() || a.name,
+    };
+    if (a.params.value === true) row.onAction = a;
+    else if (a.params.value === false) row.offAction = a;
+    else row.onAction = a; // value が無いものはとりあえず on 側に振り分けて単発実行可能にする
+    groups.set(a.applianceId, row);
+  }
+  return Array.from(groups.values());
 }
 
 const bindingColumns: ColumnsType<BindingRow> = [
@@ -79,16 +102,19 @@ export function DeviceDetailPage() {
   );
 
   const deviceActions = useMemo(
-    () =>
-      actions.filter((a) => a.applianceId === appliance?.id).sort((a, b) => {
-        // Prefer ON before OFF when value is known
-        const av = a.params.value === true ? 0 : a.params.value === false ? 1 : 2;
-        const bv = b.params.value === true ? 0 : b.params.value === false ? 1 : 2;
-        if (av !== bv) return av - bv;
-        return a.name.localeCompare(b.name);
-      }),
+    () => actions.filter((a) => a.applianceId === appliance?.id),
     [actions, appliance?.id],
   );
+
+  const controlRows = useMemo<ControlRow[]>(
+    () => groupActionsIntoRows(deviceActions),
+    [deviceActions],
+  );
+
+  // 行ごとに「直前に実行した結果が on かどうか」を覚えておく楽観的状態。
+  // 未実行時は undefined とし、ON 側の Action が存在すれば on 扱い (ON アクションの
+  // デフォルト起動起点) とする。値が存在しない場合は OFF として扱う。
+  const [optimisticState, setOptimisticState] = useState<Record<string, boolean>>({});
 
   const bindingRows: BindingRow[] = useMemo(() => {
     if (!appliance) return [];
@@ -106,17 +132,28 @@ export function DeviceDetailPage() {
     return rows;
   }, [appliance, bindings, actions, motions]);
 
-  const handleExecute = async (action: Action) => {
-    setExecutingId(action.id);
+  const handleToggle = async (row: ControlRow, next: boolean) => {
+    // next=true → ON 側の Action を実行、next=false → OFF 側の Action を実行。
+    // 片側しか存在しない場合は存在する方を実行する。
+    const target =
+      next ? row.onAction ?? row.offAction : row.offAction ?? row.onAction;
+    if (!target) {
+      message.error(`${row.name} に実行可能なアクションがありません`);
+      return;
+    }
+    setExecutingId(target.id);
     try {
-      const result = await executeAction.mutateAsync(action.id);
+      const result = await executeAction.mutateAsync(target.id);
       if (result.success) {
-        message.success(`「${action.name}」を実行しました`);
+        setOptimisticState((prev) => ({ ...prev, [row.key]: next }));
+        message.success(
+          `「${row.name}」を${next ? "ON" : "OFF"}にしました`,
+        );
       } else {
         message.error(
           result.message
             ? `実行失敗: ${result.message}`
-            : `「${action.name}」の実行に失敗しました`,
+            : `「${row.name}」の実行に失敗しました`,
         );
       }
     } catch (err) {
@@ -127,45 +164,47 @@ export function DeviceDetailPage() {
     }
   };
 
-  const actionColumns: ColumnsType<Action> = [
+  const actionColumns: ColumnsType<ControlRow> = [
     {
-      title: "Action",
+      title: "Appliance",
       dataIndex: "name",
       key: "name",
     },
     {
-      title: "Type",
-      key: "type",
+      title: "Status",
+      key: "status",
       width: 120,
-      render: (_: unknown, action: Action) => {
-        if (action.params.value === true) {
-          return <Tag color="success">ON</Tag>;
-        }
-        if (action.params.value === false) {
-          return <Tag color="default">OFF</Tag>;
-        }
-        return <Tag>OTHER</Tag>;
+      render: (_: unknown, row: ControlRow) => {
+        const isOn = optimisticState[row.key] ?? row.onAction !== undefined;
+        return (
+          <Tag color={isOn ? "success" : "default"}>
+            {isOn ? "ON" : "OFF"}
+          </Tag>
+        );
       },
     },
     {
       title: "Control",
       key: "control",
       width: 140,
-      render: (_: unknown, action: Action) => {
-        const isOn = action.params.value === true;
-        const isOff = action.params.value === false;
+      render: (_: unknown, row: ControlRow) => {
+        const isOn = optimisticState[row.key] ?? row.onAction !== undefined;
+        const isLoading =
+          executingId !== null &&
+          (executingId === row.onAction?.id || executingId === row.offAction?.id);
+        const isDisabled =
+          !row.onAction && !row.offAction
+            ? true
+            : executingId !== null && !isLoading;
         return (
-          <Button
-            type={isOn ? "primary" : isOff ? "default" : "primary"}
-            danger={isOff}
-            size="small"
-            icon={isOn ? <ThunderboltOutlined /> : <PoweroffOutlined />}
-            loading={executingId === action.id}
-            disabled={executingId !== null && executingId !== action.id}
-            onClick={() => handleExecute(action)}
-          >
-            {isOn ? "ON" : isOff ? "OFF" : "実行"}
-          </Button>
+          <Switch
+            checked={isOn}
+            disabled={isDisabled}
+            loading={isLoading}
+            checkedChildren="ON"
+            unCheckedChildren="OFF"
+            onChange={(checked) => handleToggle(row, checked)}
+          />
         );
       },
     },
@@ -221,8 +260,8 @@ export function DeviceDetailPage() {
       >
         <Table
           columns={actionColumns}
-          dataSource={deviceActions}
-          rowKey="id"
+          dataSource={controlRows}
+          rowKey="key"
           pagination={false}
           size="middle"
           locale={{
