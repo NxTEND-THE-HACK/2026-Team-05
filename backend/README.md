@@ -73,7 +73,7 @@ LINE Botは今回の認識経路では使用しないため、`LINE_SECRET` と 
 
 初期データにはカメラ、認識サービス側に実装済みのモーション、プラグA〜Cのオン・オフアクションだけを登録します。モーションとアクションの紐付けは初期登録しません。紐付けがない認識JSONを受け取った場合はTuyaを呼ばず、`FAILED` ログを残します。
 
-紐付けはフロントまたは `POST /api/bindings` から明示的に設定します。同じモーションに紐付けられるアクションは1つで、再設定すると指定したアクションへ更新します。
+紐付けはフロントまたは `POST /api/bindings` から明示的に設定します。同じモーションに紐付けられるアクションは1つで、再設定すると指定したアクションへ更新します。不要になった紐付けは `DELETE /api/bindings/:id` で削除できます。
 
 ## 疎通確認
 
@@ -119,6 +119,7 @@ GO_API_URL=http://127.0.0.1:8080/internal/detections
 | `GET` / `POST` | `/api/actions` | アクション一覧・追加 |
 | `POST` | `/api/actions/:id/execute` | 手動実行 |
 | `GET` / `POST` | `/api/bindings` | 紐付け一覧・作成または更新 |
+| `DELETE` | `/api/bindings/:id` | 紐付け削除 |
 | `GET` | `/api/logs?limit=100` | 操作ログ。最大500件 |
 
 リストAPIのレスポンスはフロントの既存型に合わせて `{ "cameras": [...] }` のような包み形式です。作成APIは作成したオブジェクトを直接返します。バックエンドでは `providerType: "TUYA"` を追加しているため、フロント側の `ActionProviderType` にもマージ時に `"TUYA"` を加えてください。

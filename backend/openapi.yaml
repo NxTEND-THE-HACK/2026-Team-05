@@ -130,6 +130,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MotionBinding" }
+  /api/bindings/{id}:
+    delete:
+      summary: Delete a motion-to-action binding
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Binding deleted
+        "404":
+          description: Binding not found
   /api/logs:
     get:
       parameters:
