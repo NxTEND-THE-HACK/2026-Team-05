@@ -244,7 +244,16 @@ export function DeviceDetailPage() {
             {appliance.category}
           </Descriptions.Item>
           <Descriptions.Item label="Status">
-            <Tag color="success">オンライン</Tag>
+            {(() => {
+              const row = controlRows[0];
+              if (!row) return <Tag>不明</Tag>;
+              const isOn = optimisticState[row.key] ?? row.onAction !== undefined;
+              return (
+                <Tag color={isOn ? "success" : "default"}>
+                  {isOn ? "ON" : "OFF"}
+                </Tag>
+              );
+            })()}
           </Descriptions.Item>
           <Descriptions.Item label="ID">{appliance.id}</Descriptions.Item>
         </Descriptions>
