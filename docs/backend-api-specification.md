@@ -172,25 +172,13 @@ GET /api/motions
       "id": "motion-pose-right-hand-up",
       "code": "POSE_RIGHT_HAND_UP",
       "name": "右手上げ",
-      "description": "右手首を右肩より上で0.45秒保持"
-    },
-    {
-      "id": "motion-pose-left-hand-up",
-      "code": "POSE_LEFT_HAND_UP",
-      "name": "左手上げ",
-      "description": "左手首を左肩より上で0.45秒保持"
+      "description": "右手首を右肩より上で0.6秒保持"
     },
     {
       "id": "motion-swipe-right",
       "code": "MOTION_SWIPE_RIGHT",
       "name": "右スワイプ",
       "description": "右手を右方向へスワイプ"
-    },
-    {
-      "id": "motion-swipe-left",
-      "code": "MOTION_SWIPE_LEFT",
-      "name": "左スワイプ",
-      "description": "左手を左方向へスワイプ"
     },
     {
       "id": "motion-finger-snap",
