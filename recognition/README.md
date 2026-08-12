@@ -136,7 +136,8 @@ recordings, run this from the `recognition` directory:
 PYTHONPATH=src python scripts/build_motion_templates.py \
   --data-dir data \
   --output models/motion_samples.json \
-  --samples-per-motion 5
+  --samples-per-motion 5 \
+  --ema-alpha 0.4
 ```
 
 The input files are expected to be JSONL landmark recordings with optional
