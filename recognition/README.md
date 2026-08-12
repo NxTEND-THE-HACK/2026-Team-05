@@ -46,10 +46,38 @@ does not store video.
 
 ```text
 MJPEG URL -> latest-frame buffer -> MediaPipe Pose + Hands
-          -> fixed gesture rules -> POST /internal/detections
+          -> shoulder normalization -> EMA smoothing
+          -> 2-second sliding window -> DTW + k-NN
+          -> UNKNOWN / confirmation / cooldown
+          -> POST /internal/detections
 ```
 
-The fixed recognition codes are:
+The runtime uses the fixed set of 11 motion codes below. It does not accept
+user-defined motions or add new motion codes at runtime. The reference asset
+`models/motion_samples.json` contains five normalized landmark time series per
+motion; it contains no camera frames.
+
+The default temporal-recognition settings are:
+
+```text
+TARGET_FPS=15
+WINDOW_FRAMES=30
+INFERENCE_STRIDE_FRAMES=3
+EMA_ALPHA=0.4
+LANDMARK_VISIBILITY=0.5
+KNN_K=3
+CONFIRMATION_COUNT=2
+RECOGNITION_COOLDOWN_SECONDS=1
+RECOGNITION_RESET_GAP_SECONDS=0.75
+```
+
+Thresholds are stored per motion in the reference asset. A classification
+whose nearest selected-motion distance exceeds that threshold is treated as
+`UNKNOWN` and is not sent to the Go API. The settings are tunable through the
+environment; changing them does not change the `/internal/detections` API.
+
+The legacy fixed-rule implementation remains available as a compatibility
+fallback and for the recording evaluator. Its motion-code catalogue is:
 
 - `POSE_RIGHT_HAND_UP`: Pose right wrist held at least 0.23 normalized units
   above the right shoulder for 0.45 s
@@ -98,6 +126,24 @@ The rules combine Pose and Hands detections. The thumb poses are only start
 states; holding a thumbs-up or thumbs-down pose by itself does not emit an
 event. Pose detections use a 0.75 s duplicate cooldown, and each motion is
 latched after one event until its release condition is observed.
+
+## Build reference templates
+
+To rebuild the checked-in normalized template asset from labeled landmark
+recordings, run this from the `recognition` directory:
+
+```bash
+PYTHONPATH=src python scripts/build_motion_templates.py \
+  --data-dir data \
+  --output models/motion_samples.json \
+  --samples-per-motion 5
+```
+
+The input files are expected to be JSONL landmark recordings with optional
+`segment_id` values. The builder deterministically selects five segments per
+motion and writes only the shoulder-normalized feature sequences. Use
+`--threshold MOTION_CODE=VALUE` to tune an individual UNKNOWN threshold from
+real-device replay results.
 
 ## Evaluate collected recordings
 
