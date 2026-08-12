@@ -24,6 +24,16 @@ class Settings:
     frame_poll_interval_seconds: float = 0.01
     pose_model_path: str = "models/pose_landmarker_full.task"
     hand_model_path: str = "models/hand_landmarker.task"
+    motion_samples_path: str = "models/motion_samples.json"
+    target_fps: float = 15.0
+    window_frames: int = 30
+    inference_stride_frames: int = 3
+    ema_alpha: float = 0.4
+    landmark_visibility: float = 0.5
+    knn_k: int = 3
+    confirmation_count: int = 2
+    recognition_cooldown_seconds: float = 1.0
+    recognition_reset_gap_seconds: float = 0.75
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -56,6 +66,26 @@ class Settings:
         hand_model_path = _required_or_default(
             values, "HAND_MODEL_PATH", "models/hand_landmarker.task"
         )
+        motion_samples_path = _required_or_default(
+            values, "MOTION_SAMPLES_PATH", "models/motion_samples.json"
+        )
+        target_fps = _positive_float(values, "TARGET_FPS", 15.0)
+        window_frames = _positive_int(values, "WINDOW_FRAMES", 30)
+        inference_stride_frames = _positive_int(
+            values, "INFERENCE_STRIDE_FRAMES", 3
+        )
+        ema_alpha = _unit_float(values, "EMA_ALPHA", 0.4, minimum_exclusive=True)
+        landmark_visibility = _unit_float(
+            values, "LANDMARK_VISIBILITY", 0.5
+        )
+        knn_k = _positive_int(values, "KNN_K", 3)
+        confirmation_count = _positive_int(values, "CONFIRMATION_COUNT", 2)
+        recognition_cooldown = _non_negative_float(
+            values, "RECOGNITION_COOLDOWN_SECONDS", 1.0
+        )
+        recognition_reset_gap = _positive_float(
+            values, "RECOGNITION_RESET_GAP_SECONDS", 0.75
+        )
 
         return cls(
             camera_id=camera_id,
@@ -69,6 +99,16 @@ class Settings:
             frame_poll_interval_seconds=poll_interval,
             pose_model_path=pose_model_path,
             hand_model_path=hand_model_path,
+            motion_samples_path=motion_samples_path,
+            target_fps=target_fps,
+            window_frames=window_frames,
+            inference_stride_frames=inference_stride_frames,
+            ema_alpha=ema_alpha,
+            landmark_visibility=landmark_visibility,
+            knn_k=knn_k,
+            confirmation_count=confirmation_count,
+            recognition_cooldown_seconds=recognition_cooldown,
+            recognition_reset_gap_seconds=recognition_reset_gap,
         )
 
 
@@ -101,6 +141,38 @@ def _positive_float(
     return value
 
 
+def _non_negative_float(
+    values: Mapping[str, str], key: str, default: float
+) -> float:
+    raw = values.get(key)
+    try:
+        value = default if raw is None else float(raw)
+    except ValueError as exc:
+        raise ConfigurationError(f"{key} must be a number") from exc
+    if value < 0:
+        raise ConfigurationError(f"{key} must not be negative")
+    return value
+
+
+def _unit_float(
+    values: Mapping[str, str],
+    key: str,
+    default: float,
+    *,
+    minimum_exclusive: bool = False,
+) -> float:
+    raw = values.get(key)
+    try:
+        value = default if raw is None else float(raw)
+    except ValueError as exc:
+        raise ConfigurationError(f"{key} must be a number") from exc
+    lower_valid = value > 0 if minimum_exclusive else value >= 0
+    if not lower_valid or value > 1:
+        operator = "greater than zero" if minimum_exclusive else "between 0 and 1"
+        raise ConfigurationError(f"{key} must be {operator}")
+    return value
+
+
 def _non_negative_int(
     values: Mapping[str, str], key: str, default: int
 ) -> int:
@@ -111,4 +183,15 @@ def _non_negative_int(
         raise ConfigurationError(f"{key} must be an integer") from exc
     if value < 0:
         raise ConfigurationError(f"{key} must not be negative")
+    return value
+
+
+def _positive_int(values: Mapping[str, str], key: str, default: int) -> int:
+    raw = values.get(key)
+    try:
+        value = default if raw is None else int(raw)
+    except ValueError as exc:
+        raise ConfigurationError(f"{key} must be an integer") from exc
+    if value <= 0:
+        raise ConfigurationError(f"{key} must be greater than zero")
     return value

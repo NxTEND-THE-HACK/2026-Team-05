@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Protocol
 from dataclasses import dataclass
+from typing import Protocol
 
 from ..domain.models import LandmarkFrame
 
@@ -22,5 +22,13 @@ class GestureRule(Protocol):
     motion_code: str
 
     def update(self, frame: LandmarkFrame) -> GestureDetection | None: ...
+
+    def reset(self) -> None: ...
+
+
+class GestureEngineLike(Protocol):
+    """Common interface accepted by the camera worker."""
+
+    def update(self, frame: LandmarkFrame) -> tuple[GestureDetection, ...]: ...
 
     def reset(self) -> None: ...

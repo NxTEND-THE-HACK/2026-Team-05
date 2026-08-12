@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import json
 
 from gesture_recognition.domain.models import HandObservation, Landmark, LandmarkFrame
 from gesture_recognition.gestures.catalog import MOTION_CODES
@@ -10,6 +11,7 @@ from gesture_recognition.gestures.temporal import (
     MotionTemplate,
     NormalizedLandmarkFrame,
     SlidingWindow,
+    TemplateSet,
     dtw_distance,
 )
 
@@ -145,3 +147,40 @@ def test_knn_returns_unknown_when_distance_exceeds_threshold() -> None:
 
     assert result.motion_code is None
     assert result.confidence == 0.0
+
+
+def test_template_set_roundtrips_compressed_frames(tmp_path) -> None:
+    template = _template(MOTION_CODES[0], 0.25)
+    path = tmp_path / "motion_samples.json"
+    TemplateSet((template,), {MOTION_CODES[0]: 0.35}).write_json(path)
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    assert raw["encoding"] == "zlib-base64"
+    assert isinstance(raw["templates"][0]["frames"], str)
+
+    loaded = TemplateSet.from_json(path)
+    assert loaded.templates[0].motion_code == template.motion_code
+    assert loaded.templates[0].sample_id == template.sample_id
+    assert loaded.templates[0].frames[0][0] == (0.25, 0.25, 0.25)
+
+
+def test_numpy_knn_distance_matches_reference_dtw() -> None:
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        return
+
+    at = datetime(2026, 8, 12, tzinfo=timezone.utc)
+    window = (_normalized_frame(0.1, at), _normalized_frame(0.2, at))
+    template = MotionTemplate(
+        MOTION_CODES[0],
+        "sample-1",
+        tuple(frame.points for frame in window),
+    )
+    result = KNNMotionClassifier(
+        (template,),
+        thresholds={MOTION_CODES[0]: 1.0},
+    ).classify(window)
+
+    assert result.motion_code == MOTION_CODES[0]
+    assert result.distance == 0.0

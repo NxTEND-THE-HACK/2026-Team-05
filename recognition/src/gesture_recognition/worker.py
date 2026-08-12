@@ -7,7 +7,7 @@ from threading import Event
 
 from .delivery.go_api_client import DeliveryError
 from .domain.models import DetectionEvent
-from .gestures.engine import GestureEngine
+from .gestures.base import GestureEngineLike
 from .inference.mediapipe_detector import MediaPipeDetector
 from .stream.base import FrameSource
 
@@ -23,7 +23,7 @@ class RecognitionWorker:
         camera_id: str,
         source: FrameSource,
         detector: MediaPipeDetector,
-        engine: GestureEngine,
+        engine: GestureEngineLike,
         client: object,
         frame_poll_interval_seconds: float = 0.01,
     ) -> None:

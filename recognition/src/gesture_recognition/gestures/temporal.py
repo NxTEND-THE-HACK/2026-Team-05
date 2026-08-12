@@ -8,8 +8,11 @@ with recorded or synthetic landmarks.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import math
+import zlib
 from collections import Counter, deque
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,6 +21,11 @@ from typing import Any, Iterable, Sequence
 
 from ..domain.models import HandObservation, Landmark, LandmarkFrame
 from .catalog import SUPPORTED_MOTION_CODES
+
+try:  # NumPy is a runtime dependency, but domain-only tests can run without it.
+    import numpy as _np
+except ImportError:  # pragma: no cover - exercised only in dependency-free envs
+    _np = None
 
 Point = tuple[float, float, float]
 PointSequence = Sequence[Point | None]
@@ -402,15 +410,44 @@ class TemplateSet:
         raw_templates = raw.get("templates")
         if not isinstance(raw_templates, list):
             raise ValueError("motion template file must contain templates")
+        feature_names = raw.get("feature_names")
+        if feature_names is not None and tuple(feature_names) != FEATURE_NAMES:
+            raise ValueError("motion template feature order does not match runtime")
+        encoding = str(raw.get("encoding", "plain"))
+        coordinate_scale = float(raw.get("coordinate_scale", 1.0))
+        if coordinate_scale <= 0:
+            raise ValueError("coordinate_scale must be positive")
 
         templates: list[MotionTemplate] = []
         for raw_template in raw_templates:
             if not isinstance(raw_template, dict):
                 raise ValueError("each motion template must be an object")
             raw_frames = raw_template.get("frames")
+            if encoding == "zlib-base64":
+                if isinstance(raw_frames, list) and all(
+                    isinstance(chunk, str) for chunk in raw_frames
+                ):
+                    raw_frames = "".join(raw_frames)
+                if not isinstance(raw_frames, str):
+                    raise ValueError("compressed template frames must be a string")
+                try:
+                    raw_frames = json.loads(
+                        zlib.decompress(base64.b64decode(raw_frames)).decode("utf-8")
+                    )
+                except (
+                    ValueError,
+                    TypeError,
+                    UnicodeError,
+                    binascii.Error,
+                    zlib.error,
+                ) as exc:
+                    raise ValueError("invalid compressed motion template frames") from exc
             if not isinstance(raw_frames, list):
                 raise ValueError("each motion template must contain frames")
-            frames = tuple(_decode_frame(raw_frame) for raw_frame in raw_frames)
+            frames = tuple(
+                _decode_frame(raw_frame, coordinate_scale=coordinate_scale)
+                for raw_frame in raw_frames
+            )
             templates.append(
                 MotionTemplate(
                     motion_code=str(raw_template.get("motion_code", "")),
@@ -426,21 +463,37 @@ class TemplateSet:
         return cls(tuple(templates), thresholds, schema_version)
 
     def to_json_object(self) -> dict[str, Any]:
+        coordinate_scale = 1000.0
         return {
             "schema_version": self.schema_version,
             "feature_names": list(FEATURE_NAMES),
+            "encoding": "zlib-base64",
+            "coordinate_scale": coordinate_scale,
             "thresholds": dict(sorted(self.thresholds.items())),
             "templates": [
                 {
                     "motion_code": template.motion_code,
                     "sample_id": template.sample_id,
-                    "frames": [
-                        [
-                            None if point is None else list(point)
-                            for point in frame
-                        ]
-                        for frame in template.frames
-                    ],
+                    "frames": base64.b64encode(
+                        zlib.compress(
+                            json.dumps(
+                                [
+                                    [
+                                        None
+                                        if point is None
+                                        else [
+                                            round(value * coordinate_scale)
+                                            for value in point
+                                        ]
+                                        for point in frame
+                                    ]
+                                    for frame in template.frames
+                                ],
+                                separators=(",", ":"),
+                            ).encode("utf-8"),
+                            level=9,
+                        )
+                    ).decode("ascii"),
                 }
                 for template in self.templates
             ],
@@ -456,7 +509,9 @@ class TemplateSet:
         )
 
 
-def _decode_frame(raw_frame: Any) -> tuple[Point | None, ...]:
+def _decode_frame(
+    raw_frame: Any, *, coordinate_scale: float = 1.0
+) -> tuple[Point | None, ...]:
     if not isinstance(raw_frame, list) or len(raw_frame) != len(FEATURE_NAMES):
         raise ValueError(f"each template frame must contain {len(FEATURE_NAMES)} features")
     points: list[Point | None] = []
@@ -470,7 +525,13 @@ def _decode_frame(raw_frame: Any) -> tuple[Point | None, ...]:
             or not all(isinstance(value, (int, float)) for value in raw_point)
         ):
             raise ValueError("template points must be null or [x, y, z]")
-        points.append((float(raw_point[0]), float(raw_point[1]), float(raw_point[2])))
+        points.append(
+            (
+                float(raw_point[0]) / coordinate_scale,
+                float(raw_point[1]) / coordinate_scale,
+                float(raw_point[2]) / coordinate_scale,
+            )
+        )
     return tuple(points)
 
 
@@ -510,6 +571,11 @@ class KNNMotionClassifier:
         self.k = min(k, len(self.templates))
         self.thresholds = dict(thresholds or {})
         self.missing_point_penalty = missing_point_penalty
+        self._numpy_template_batches = (
+            _build_numpy_template_batches(self.templates)
+            if _np is not None
+            else None
+        )
         for motion_code, threshold in self.thresholds.items():
             if motion_code not in SUPPORTED_MOTION_CODES:
                 raise ValueError(f"unsupported threshold motion code: {motion_code}")
@@ -521,20 +587,36 @@ class KNNMotionClassifier:
     ) -> ClassificationResult:
         if not window:
             raise ValueError("classification window must not be empty")
+        window_arrays = _numpy_arrays(window) if _np is not None else None
+        distances = []
+        if self._numpy_template_batches is None or window_arrays is None:
+            for template in self.templates:
+                distance = dtw_distance(
+                    window,
+                    template.frames,
+                    missing_point_penalty=self.missing_point_penalty,
+                )
+                distances.append((template, distance))
+        else:
+            for start_index, lengths, values, valid in self._numpy_template_batches:
+                batch_distances = _numpy_dtw_distances(
+                    window_arrays,
+                    values,
+                    valid,
+                    lengths,
+                    missing_point_penalty=self.missing_point_penalty,
+                )
+                distances.extend(
+                    (
+                        self.templates[start_index + offset],
+                        distance,
+                    )
+                    for offset, distance in enumerate(batch_distances)
+                )
         neighbors = tuple(
             Neighbor(template.motion_code, template.sample_id, distance)
             for template, distance in sorted(
-                (
-                    (
-                        template,
-                        dtw_distance(
-                            window,
-                            template.frames,
-                            missing_point_penalty=self.missing_point_penalty,
-                        ),
-                    )
-                    for template in self.templates
-                ),
+                distances,
                 key=lambda item: (item[1], item[0].motion_code, item[0].sample_id),
             )[: self.k]
         )
@@ -553,9 +635,119 @@ class KNNMotionClassifier:
                 motion_code,
             ),
         )
-        winner_distance = min(grouped[winner])
+        nearest_distance = neighbors[0].distance
         threshold = self.thresholds.get(winner, DEFAULT_DTW_THRESHOLD)
-        if winner_distance > threshold:
-            return ClassificationResult(None, 0.0, winner_distance, neighbors)
-        confidence = max(0.0, min(1.0, 1.0 - winner_distance / threshold))
-        return ClassificationResult(winner, confidence, winner_distance, neighbors)
+        if nearest_distance > threshold:
+            return ClassificationResult(None, 0.0, nearest_distance, neighbors)
+        confidence = max(0.0, min(1.0, 1.0 - nearest_distance / threshold))
+        return ClassificationResult(winner, confidence, nearest_distance, neighbors)
+
+
+def _numpy_arrays(
+    sequence: Sequence[PointSequence | NormalizedLandmarkFrame],
+) -> tuple[Any, Any]:
+    assert _np is not None
+    values = _np.zeros((len(sequence), len(FEATURE_NAMES), 3), dtype=_np.float64)
+    valid = _np.zeros((len(sequence), len(FEATURE_NAMES)), dtype=_np.bool_)
+    for frame_index, item in enumerate(sequence):
+        points = _points(item)
+        for point_index, point in enumerate(points):
+            if point is not None:
+                values[frame_index, point_index] = point
+                valid[frame_index, point_index] = True
+    return values, valid
+
+
+def _build_numpy_template_batches(
+    templates: Sequence[MotionTemplate], *, batch_size: int = 1
+) -> tuple[tuple[int, tuple[int, ...], Any, Any], ...]:
+    assert _np is not None
+    batches = []
+    for start_index in range(0, len(templates), batch_size):
+        template_arrays = [
+            _numpy_arrays(template.frames)
+            for template in templates[start_index : start_index + batch_size]
+        ]
+        max_frames = max(values.shape[0] for values, _ in template_arrays)
+        values = _np.zeros(
+            (len(template_arrays), max_frames, len(FEATURE_NAMES), 3),
+            dtype=_np.float64,
+        )
+        valid = _np.zeros(
+            (len(template_arrays), max_frames, len(FEATURE_NAMES)),
+            dtype=_np.bool_,
+        )
+        lengths = []
+        for index, (template_values, template_valid) in enumerate(template_arrays):
+            length = template_values.shape[0]
+            values[index, :length] = template_values
+            valid[index, :length] = template_valid
+            lengths.append(length)
+        batches.append((start_index, tuple(lengths), values, valid))
+    return tuple(batches)
+
+
+def _numpy_dtw_distances(
+    window_arrays: tuple[Any, Any],
+    template_values: Any,
+    template_valid: Any,
+    template_lengths: Sequence[int],
+    *,
+    missing_point_penalty: float,
+) -> list[float]:
+    assert _np is not None
+    window_values, window_valid = window_arrays
+    coordinate_distance = _np.sqrt(
+        _np.sum(
+            (
+                window_values[None, :, None, :, :]
+                - template_values[:, None, :, :, :]
+            )
+            ** 2,
+            axis=4,
+        )
+    )
+    both_valid = window_valid[None, :, None, :] & template_valid[:, None, :, :]
+    one_missing = window_valid[None, :, None, :] ^ template_valid[:, None, :, :]
+    local_distances = _np.where(both_valid, coordinate_distance, 0.0)
+    local_distances += _np.where(one_missing, missing_point_penalty, 0.0)
+    local_distances = local_distances.sum(axis=3) / max(len(FEATURE_NAMES), 1)
+    return [
+        _dtw_from_local_distances(
+            local_distances[index, :, :length].tolist()
+        )
+        for index, length in enumerate(template_lengths)
+    ]
+
+
+def _dtw_from_local_distances(local_distances: list[list[float]]) -> float:
+    """Align a precomputed frame-distance matrix and normalize its path."""
+
+    rows = len(local_distances)
+    columns = len(local_distances[0]) if rows else 0
+    costs = [[math.inf] * (columns + 1) for _ in range(rows + 1)]
+    predecessors: list[list[tuple[int, int] | None]] = [
+        [None] * (columns + 1) for _ in range(rows + 1)
+    ]
+    costs[0][0] = 0.0
+    for row in range(1, rows + 1):
+        for column in range(1, columns + 1):
+            candidates = (
+                (costs[row - 1][column], (row - 1, column)),
+                (costs[row][column - 1], (row, column - 1)),
+                (costs[row - 1][column - 1], (row - 1, column - 1)),
+            )
+            previous_cost, previous_cell = min(candidates, key=lambda item: item[0])
+            costs[row][column] = previous_cost + local_distances[row - 1][column - 1]
+            predecessors[row][column] = previous_cell
+
+    row = rows
+    column = columns
+    path_length = 0
+    while row or column:
+        previous = predecessors[row][column]
+        if previous is None:
+            raise ValueError("DTW could not construct an alignment path")
+        path_length += 1
+        row, column = previous
+    return costs[-1][-1] / max(path_length, 1)
