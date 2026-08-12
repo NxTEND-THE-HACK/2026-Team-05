@@ -26,6 +26,7 @@ def main() -> None:
         settings.camera_source,
         reconnect_initial_seconds=settings.reconnect_initial_seconds,
         reconnect_max_seconds=settings.reconnect_max_seconds,
+        stale_after_seconds=settings.camera_stale_after_seconds,
     )
     worker = RecognitionWorker(
         camera_id=settings.camera_id,

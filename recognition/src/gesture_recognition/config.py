@@ -22,6 +22,7 @@ class Settings:
     detection_send_retries: int = 3
     detection_send_timeout_seconds: float = 3.0
     frame_poll_interval_seconds: float = 0.01
+    camera_stale_after_seconds: float = 3.0
     pose_model_path: str = "models/pose_landmarker_full.task"
     hand_model_path: str = "models/hand_landmarker.task"
     motion_samples_path: str = "models/motion_samples.json"
@@ -60,6 +61,9 @@ class Settings:
         poll_interval = _positive_float(
             values, "FRAME_POLL_INTERVAL_SECONDS", 0.01
         )
+        camera_stale_after = _positive_float(
+            values, "CAMERA_STALE_AFTER_SECONDS", 3.0
+        )
         pose_model_path = _required_or_default(
             values, "POSE_MODEL_PATH", "models/pose_landmarker_full.task"
         )
@@ -97,6 +101,7 @@ class Settings:
             detection_send_retries=retries,
             detection_send_timeout_seconds=timeout,
             frame_poll_interval_seconds=poll_interval,
+            camera_stale_after_seconds=camera_stale_after,
             pose_model_path=pose_model_path,
             hand_model_path=hand_model_path,
             motion_samples_path=motion_samples_path,

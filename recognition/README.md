@@ -181,6 +181,19 @@ PYTHONPATH=src python scripts/monitor_detections.py \
   --camera-source http://10.0.1.107/stream
 ```
 
+The monitor dashboard also shows camera connection status. This status is
+kept inside the Python process and is not sent to the Go API. The status is
+based on actual MJPEG frame reception:
+
+- `CONNECTED`: frames are arriving
+- `CONNECTING`: the first connection is being attempted
+- `RECONNECTING`: the stream ended or failed and a retry is scheduled
+- `STALE`: no frame arrived within `CAMERA_STALE_AFTER_SECONDS`
+- `STOPPED`: the Python monitor or worker has stopped
+
+`CAMERA_STALE_AFTER_SECONDS` defaults to 3 seconds. The monitor equivalent can
+be overridden with `--stale-after-seconds 3`.
+
 ## Run locally
 
 ```bash

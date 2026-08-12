@@ -17,6 +17,18 @@
     h1 { margin: 0; font-size: 30px; }
     .status { color: #9fb0c9; font-size: 14px; }
     .safe { margin: 22px 0; padding: 14px 18px; border: 1px solid #2c9a70; border-radius: 12px; background: #123427; color: #b9f4d9; font-weight: 700; }
+    .camera-panel { margin: 22px 0; padding: 18px; border: 1px solid #34415e; border-radius: 16px; background: #171e2e; }
+    .camera-panel h2 { margin-bottom: 14px; }
+    .camera-summary { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; }
+    .camera-dot { width: 13px; height: 13px; border-radius: 50%; background: #9fb0c9; box-shadow: 0 0 0 4px #9fb0c922; }
+    .camera-panel.connected .camera-dot { background: #49d391; box-shadow: 0 0 0 4px #49d39122; }
+    .camera-panel.connecting .camera-dot, .camera-panel.reconnecting .camera-dot { background: #f3c969; box-shadow: 0 0 0 4px #f3c96922; }
+    .camera-panel.stale .camera-dot, .camera-panel.stopped .camera-dot, .camera-panel.error .camera-dot { background: #f27878; box-shadow: 0 0 0 4px #f2787822; }
+    .camera-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+    .camera-detail { padding: 12px; border-radius: 10px; background: #202a40; }
+    .camera-detail-label { color: #9fb0c9; font-size: 12px; }
+    .camera-detail-value { margin-top: 5px; font-size: 16px; font-weight: 700; }
+    .camera-error { margin-top: 14px; padding: 10px 12px; border-radius: 9px; background: #3b2028; color: #ffb7b7; font-size: 13px; }
     .latest { min-height: 230px; display: grid; place-items: center; text-align: center; border: 1px solid #34415e; border-radius: 18px; background: linear-gradient(135deg, #1e2c4b, #182033); box-shadow: 0 20px 50px #06091288; }
     .latest.empty { color: #9fb0c9; }
     .latest-name { font-size: 56px; font-weight: 800; letter-spacing: .02em; }
@@ -34,6 +46,7 @@
     @media (max-width: 700px) {
       body { padding: 16px; }
       header { align-items: flex-start; flex-direction: column; }
+      .camera-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .latest-name { font-size: 38px; }
       th, td { padding: 10px 8px; font-size: 13px; }
     }
@@ -47,6 +60,33 @@
     </header>
 
     <div class="safe">家電連携：無効　／　判定結果の表示のみ</div>
+
+    <section id="camera-panel" class="camera-panel" aria-live="polite">
+      <h2>カメラ接続</h2>
+      <div class="camera-summary">
+        <span class="camera-dot" aria-hidden="true"></span>
+        <span id="camera-state">状態取得中...</span>
+      </div>
+      <div class="camera-details">
+        <div class="camera-detail">
+          <div class="camera-detail-label">最終フレーム</div>
+          <div id="camera-last-frame" class="camera-detail-value">-</div>
+        </div>
+        <div class="camera-detail">
+          <div class="camera-detail-label">受信FPS</div>
+          <div id="camera-fps" class="camera-detail-value">-</div>
+        </div>
+        <div class="camera-detail">
+          <div class="camera-detail-label">再接続回数</div>
+          <div id="camera-reconnects" class="camera-detail-value">-</div>
+        </div>
+        <div class="camera-detail">
+          <div class="camera-detail-label">次回接続試行</div>
+          <div id="camera-retry" class="camera-detail-value">-</div>
+        </div>
+      </div>
+      <div id="camera-error" class="camera-error" hidden></div>
+    </section>
 
     <section id="latest" class="latest empty">
       <div>
@@ -69,6 +109,13 @@
   <script>
     const stateUrl = "/data/monitor_detections_live.json";
     const statusElement = document.getElementById("status");
+    const cameraPanel = document.getElementById("camera-panel");
+    const cameraState = document.getElementById("camera-state");
+    const cameraLastFrame = document.getElementById("camera-last-frame");
+    const cameraFps = document.getElementById("camera-fps");
+    const cameraReconnects = document.getElementById("camera-reconnects");
+    const cameraRetry = document.getElementById("camera-retry");
+    const cameraError = document.getElementById("camera-error");
     const latestElement = document.getElementById("latest");
     const historyElement = document.getElementById("history");
 
@@ -76,10 +123,51 @@
       return new Date(value).toLocaleTimeString("ja-JP", {hour12: false});
     }
 
+    const cameraStateLabels = {
+      CONNECTED: ["connected", "接続中"],
+      CONNECTING: ["connecting", "接続試行中"],
+      RECONNECTING: ["reconnecting", "再接続中"],
+      STALE: ["stale", "映像停止"],
+      STOPPED: ["stopped", "停止"],
+    };
+
+    function renderCamera(camera) {
+      if (!camera) {
+        cameraPanel.className = "camera-panel error";
+        cameraState.textContent = "状態未取得";
+        cameraLastFrame.textContent = "-";
+        cameraFps.textContent = "-";
+        cameraReconnects.textContent = "-";
+        cameraRetry.textContent = "-";
+        cameraError.hidden = true;
+        return;
+      }
+
+      const [className, label] = cameraStateLabels[camera.state] || ["error", "不明"];
+      cameraPanel.className = `camera-panel ${className}`;
+      cameraState.textContent = label;
+      cameraLastFrame.textContent = camera.last_frame_age_seconds == null
+        ? "未受信"
+        : `${camera.last_frame_age_seconds.toFixed(1)}秒前`;
+      cameraFps.textContent = `${Number(camera.receive_fps || 0).toFixed(1)} fps`;
+      cameraReconnects.textContent = `${camera.reconnect_count || 0}回`;
+      cameraRetry.textContent = camera.retry_in_seconds == null
+        ? "-"
+        : `${camera.retry_in_seconds.toFixed(1)}秒後`;
+      if (camera.last_error) {
+        cameraError.hidden = false;
+        cameraError.textContent = `原因: ${camera.last_error}`;
+      } else {
+        cameraError.hidden = true;
+        cameraError.textContent = "";
+      }
+    }
+
     function render(state) {
       statusElement.textContent = state.status === "running"
         ? `判定中　最終更新 ${time(state.updated_at)}`
         : `モニター停止中　最終更新 ${time(state.updated_at)}`;
+      renderCamera(state.camera);
 
       if (state.latest) {
         const latest = state.latest;
@@ -120,6 +208,7 @@
         render(await response.json());
       } catch (error) {
         statusElement.textContent = "判定モニターへ接続できません";
+        renderCamera(null);
       }
     }
 

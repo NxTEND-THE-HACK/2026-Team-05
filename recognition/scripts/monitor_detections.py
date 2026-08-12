@@ -13,7 +13,7 @@ from threading import Event
 
 from gesture_recognition.gestures.registry import default_engine
 from gesture_recognition.inference.mediapipe_detector import MediaPipeDetector
-from gesture_recognition.stream.mjpeg import MjpegFrameSource
+from gesture_recognition.stream.mjpeg import MjpegFrameSource, MjpegSourceStatus
 
 
 MOTION_NAMES = {
@@ -37,6 +37,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--pose-model-path", default="models/pose_landmarker_full.task")
     parser.add_argument("--hand-model-path", default="models/hand_landmarker.task")
     parser.add_argument("--poll-interval", type=float, default=0.01)
+    parser.add_argument("--stale-after-seconds", type=float, default=3.0)
     parser.add_argument(
         "--state-path",
         type=Path,
@@ -54,12 +55,16 @@ def _write_state(
     *,
     status: str,
     history: list[dict[str, object]],
+    camera_status: MjpegSourceStatus | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "status": status,
         "appliance_delivery": False,
         "updated_at": datetime.now().astimezone().isoformat(),
+        "camera": (
+            None if camera_status is None else camera_status.to_payload()
+        ),
         "latest": history[-1] if history else None,
         "history": list(reversed(history[-50:])),
     }
@@ -82,14 +87,17 @@ def _write_state(
 
 def main() -> None:
     args = _parse_args()
-    if args.poll_interval <= 0:
-        raise SystemExit("--poll-interval must be positive")
+    if args.poll_interval <= 0 or args.stale_after_seconds <= 0:
+        raise SystemExit("poll and stale thresholds must be positive")
 
     stop_event = Event()
     signal.signal(signal.SIGINT, lambda *_: stop_event.set())
     signal.signal(signal.SIGTERM, lambda *_: stop_event.set())
 
-    source = MjpegFrameSource(args.camera_source)
+    source = MjpegFrameSource(
+        args.camera_source,
+        stale_after_seconds=args.stale_after_seconds,
+    )
     detector = MediaPipeDetector(
         pose_model_path=args.pose_model_path,
         hand_model_path=args.hand_model_path,
@@ -98,10 +106,26 @@ def main() -> None:
     sequence = 0
     history: list[dict[str, object]] = []
 
-    _write_state(args.state_path, status="running", history=history)
     source.start()
+    _write_state(
+        args.state_path,
+        status="running",
+        history=history,
+        camera_status=source.get_status(),
+    )
+    next_state_write = time.monotonic()
     try:
         while not stop_event.is_set():
+            now = time.monotonic()
+            if now >= next_state_write:
+                _write_state(
+                    args.state_path,
+                    status="running",
+                    history=history,
+                    camera_status=source.get_status(),
+                )
+                next_state_write = now + 0.5
+
             frame = source.read_latest(after_sequence=sequence)
             if frame is None:
                 stop_event.wait(args.poll_interval)
@@ -123,7 +147,12 @@ def main() -> None:
                         "confidence": round(detection.confidence, 4),
                     }
                 )
-                _write_state(args.state_path, status="running", history=history)
+                _write_state(
+                    args.state_path,
+                    status="running",
+                    history=history,
+                    camera_status=source.get_status(),
+                )
                 print(
                     f"{_format_timestamp(landmarks.captured_at)} | "
                     f"{detection.motion_code} | confidence={detection.confidence:.2f}",
@@ -132,7 +161,12 @@ def main() -> None:
     finally:
         source.stop()
         detector.close()
-        _write_state(args.state_path, status="stopped", history=history)
+        _write_state(
+            args.state_path,
+            status="stopped",
+            history=history,
+            camera_status=source.get_status(),
+        )
 
 
 if __name__ == "__main__":
