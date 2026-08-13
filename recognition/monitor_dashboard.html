@@ -29,6 +29,11 @@
     .camera-detail-label { color: #9fb0c9; font-size: 12px; }
     .camera-detail-value { margin-top: 5px; font-size: 16px; font-weight: 700; }
     .camera-error { margin-top: 14px; padding: 10px 12px; border-radius: 9px; background: #3b2028; color: #ffb7b7; font-size: 13px; }
+    .landmark-panel { margin-top: 26px; padding: 18px; border: 1px solid #34415e; border-radius: 16px; background: #171e2e; }
+    .landmark-stage { position: relative; min-height: 260px; display: grid; place-items: center; overflow: hidden; border-radius: 12px; background: #0c111d; }
+    .landmark-stage img { display: block; width: 100%; height: auto; max-height: 560px; object-fit: contain; }
+    .landmark-empty { padding: 40px 20px; color: #9fb0c9; text-align: center; }
+    .landmark-details { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; color: #afc2e5; font-size: 14px; }
     .latest { min-height: 230px; display: grid; place-items: center; text-align: center; border: 1px solid #34415e; border-radius: 18px; background: linear-gradient(135deg, #1e2c4b, #182033); box-shadow: 0 20px 50px #06091288; }
     .latest.empty { color: #9fb0c9; }
     .latest-name { font-size: 56px; font-weight: 800; letter-spacing: .02em; }
@@ -88,6 +93,19 @@
       <div id="camera-error" class="camera-error" hidden></div>
     </section>
 
+    <section class="landmark-panel">
+      <h2>MediaPipeランドマーク</h2>
+      <div class="landmark-stage">
+        <img id="landmark-overlay" alt="MediaPipeが検出したPoseとHandsのランドマーク" hidden>
+        <div id="landmark-empty" class="landmark-empty">ランドマーク画像を待っています...</div>
+      </div>
+      <div class="landmark-details">
+        <span id="landmark-pose">Pose: -</span>
+        <span id="landmark-hands">Hands: -</span>
+        <span id="landmark-captured">最終フレーム: -</span>
+      </div>
+    </section>
+
     <section id="latest" class="latest empty">
       <div>
         <div class="latest-name">判定待ち</div>
@@ -116,6 +134,11 @@
     const cameraReconnects = document.getElementById("camera-reconnects");
     const cameraRetry = document.getElementById("camera-retry");
     const cameraError = document.getElementById("camera-error");
+    const landmarkOverlay = document.getElementById("landmark-overlay");
+    const landmarkEmpty = document.getElementById("landmark-empty");
+    const landmarkPose = document.getElementById("landmark-pose");
+    const landmarkHands = document.getElementById("landmark-hands");
+    const landmarkCaptured = document.getElementById("landmark-captured");
     const latestElement = document.getElementById("latest");
     const historyElement = document.getElementById("history");
 
@@ -163,11 +186,37 @@
       }
     }
 
+    function renderLandmarks(landmarks) {
+      if (!landmarks) {
+        landmarkPose.textContent = "Pose: -";
+        landmarkHands.textContent = "Hands: -";
+        landmarkCaptured.textContent = "最終フレーム: -";
+        return;
+      }
+      landmarkPose.textContent = `Pose: ${landmarks.pose_points || 0} points`;
+      landmarkHands.textContent = `Hands: ${landmarks.hand_count || 0} (${landmarks.hand_points || 0} points)`;
+      landmarkCaptured.textContent = landmarks.captured_at
+        ? `最終フレーム: ${time(landmarks.captured_at)}`
+        : "最終フレーム: -";
+    }
+
     function render(state) {
       statusElement.textContent = state.status === "running"
         ? `判定中　最終更新 ${time(state.updated_at)}`
         : `モニター停止中　最終更新 ${time(state.updated_at)}`;
       renderCamera(state.camera);
+      renderLandmarks(state.landmarks);
+
+      const overlayUrl = `/data/monitor_landmarks.jpg?t=${Date.now()}`;
+      landmarkOverlay.onload = () => {
+        landmarkOverlay.hidden = false;
+        landmarkEmpty.hidden = true;
+      };
+      landmarkOverlay.onerror = () => {
+        landmarkOverlay.hidden = true;
+        landmarkEmpty.hidden = false;
+      };
+      landmarkOverlay.src = overlayUrl;
 
       if (state.latest) {
         const latest = state.latest;

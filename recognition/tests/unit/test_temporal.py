@@ -6,6 +6,7 @@ from gesture_recognition.gestures.catalog import MOTION_CODES
 from gesture_recognition.gestures.temporal import (
     FEATURE_NAMES,
     ExponentialMovingAverage,
+    HandGapFiller,
     KNNMotionClassifier,
     LandmarkNormalizer,
     MotionTemplate,
@@ -53,6 +54,26 @@ def _template(motion_code: str, value: float) -> MotionTemplate:
         "sample-1",
         (tuple((value, value, value) for _ in FEATURE_NAMES),),
     )
+
+
+def _normalized_hand_frame(
+    at: datetime,
+    *,
+    with_hand: bool,
+    wrist_x: float = 0.0,
+) -> NormalizedLandmarkFrame:
+    points: list[tuple[float, float, float] | None] = [
+        None
+    ] * len(FEATURE_NAMES)
+    points[FEATURE_NAMES.index("POSE_RIGHT_WRIST")] = (wrist_x, 0.0, 0.0)
+    if with_hand:
+        for index in range(21):
+            points[FEATURE_NAMES.index(f"RIGHT_HAND_{index}")] = (
+                wrist_x + index * 0.01,
+                0.0,
+                0.0,
+            )
+    return NormalizedLandmarkFrame(at, tuple(points))
 
 
 def test_normalizer_uses_shoulder_midpoint_and_width() -> None:
@@ -103,6 +124,35 @@ def test_ema_applies_alpha_and_resets() -> None:
     assert ema.update(_normalized_frame(1.0, at)).points[0] == (1.0, 1.0, 1.0)
 
 
+def test_hand_gap_filler_translates_short_dropout_and_expires() -> None:
+    at = datetime(2026, 8, 12, tzinfo=timezone.utc)
+    filler = HandGapFiller(max_gap_seconds=0.5)
+    filler.update(_normalized_hand_frame(at, with_hand=True))
+
+    recovered = filler.update(
+        _normalized_hand_frame(
+            at + timedelta(seconds=0.1),
+            with_hand=False,
+            wrist_x=0.2,
+        )
+    )
+    recovered_point = recovered.points[FEATURE_NAMES.index("RIGHT_HAND_0")]
+    assert recovered_point == (0.2, 0.0, 0.0)
+    assert recovered.observed is not None
+    assert not recovered.observed[FEATURE_NAMES.index("RIGHT_HAND_0")]
+    assert recovered.weights is not None
+    assert 0.2 < recovered.weights[FEATURE_NAMES.index("RIGHT_HAND_0")] < 0.55
+
+    expired = filler.update(
+        _normalized_hand_frame(
+            at + timedelta(seconds=1.0),
+            with_hand=False,
+            wrist_x=0.2,
+        )
+    )
+    assert expired.points[FEATURE_NAMES.index("RIGHT_HAND_0")] is None
+
+
 def test_sliding_window_keeps_only_latest_frames() -> None:
     at = datetime(2026, 8, 12, tzinfo=timezone.utc)
     window = SlidingWindow(max_frames=2)
@@ -136,6 +186,37 @@ def test_knn_uses_majority_vote_and_average_distance_for_ties() -> None:
 
     assert result.motion_code == MOTION_CODES[0]
     assert result.confidence > 0.0
+
+
+def test_knn_prefers_an_exact_registered_sample_over_other_votes() -> None:
+    at = datetime(2026, 8, 12, tzinfo=timezone.utc)
+    window = (_normalized_frame(0.0, at),)
+    templates = (
+        _template(MOTION_CODES[0], 0.0),
+        _template(MOTION_CODES[1], 0.5),
+        _template(MOTION_CODES[1], 0.6),
+    )
+
+    result = KNNMotionClassifier(
+        templates,
+        k=3,
+        thresholds={code: 1.0 for code in MOTION_CODES},
+    ).classify(window)
+
+    assert result.motion_code == MOTION_CODES[0]
+    assert result.distance == 0.0
+
+
+def test_knn_accepts_a_future_motion_code_without_catalog_rules() -> None:
+    at = datetime(2026, 8, 12, tzinfo=timezone.utc)
+    future_code = "MOTION_FUTURE_TEST"
+    result = KNNMotionClassifier(
+        (_template(future_code, 0.0),),
+        thresholds={future_code: 1.0},
+    ).classify((_normalized_frame(0.0, at),))
+
+    assert result.motion_code == future_code
+    assert result.confidence == 1.0
 
 
 def test_knn_returns_unknown_when_distance_exceeds_threshold() -> None:

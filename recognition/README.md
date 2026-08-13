@@ -68,7 +68,7 @@ LANDMARK_VISIBILITY=0.5
 KNN_K=3
 CONFIRMATION_COUNT=2
 RECOGNITION_COOLDOWN_SECONDS=1
-RECOGNITION_RESET_GAP_SECONDS=0.75
+RECOGNITION_RESET_GAP_SECONDS=1.5
 ```
 
 Thresholds are stored per motion in the reference asset. A classification
@@ -136,7 +136,7 @@ recordings, run this from the `recognition` directory:
 PYTHONPATH=src python scripts/build_motion_templates.py \
   --data-dir data \
   --output models/motion_samples.json \
-  --samples-per-motion 5 \
+  --samples-per-motion 10 \
   --ema-alpha 0.4
 ```
 
@@ -158,9 +158,9 @@ PYTHONPATH=src python scripts/evaluate_recordings.py \
 ```
 
 The evaluator reports Pose/Hands coverage, detection counts, and whether each
-known segment produced exactly one detection. The runtime engine also resets
-gesture state after a 0.75-second capture gap so omitted waiting frames do not
-join two recorded gestures.
+known segment produced exactly one detection. The runtime engine resets
+gesture state after a 1.5-second capture gap so omitted waiting frames do not
+join two recorded gestures while absorbing temporary recording gaps.
 
 To run the same recordings through every rule and inspect off-diagonal false
 positives, add `--cross-check`:

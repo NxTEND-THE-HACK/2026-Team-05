@@ -26,6 +26,8 @@ def _engine(
     *,
     threshold: float = 0.35,
     confirmation_count: int = 2,
+    window_frames: int = 30,
+    minimum_window_frames: int | None = None,
 ) -> TemporalGestureEngine:
     start = datetime(2026, 8, 12, tzinfo=timezone.utc)
     normalized = LandmarkNormalizer().normalize(_raw_frame(start))
@@ -38,6 +40,8 @@ def _engine(
     return TemporalGestureEngine(
         TemplateSet((template,), {MOTION_CODES[0]: threshold}),
         confirmation_count=confirmation_count,
+        window_frames=window_frames,
+        minimum_window_frames=minimum_window_frames,
     )
 
 
@@ -75,7 +79,18 @@ def test_temporal_engine_uses_window_stride_and_confirmation() -> None:
     )
 
     assert detections == [MOTION_CODES[0]]
-    assert engine.sampled_frame_count == 35
+    # A confirmed event starts a fresh temporal sequence.
+    assert engine.sampled_frame_count == 2
+
+
+def test_temporal_engine_allows_strong_consensus_during_window_warmup() -> None:
+    start = datetime(2026, 8, 12, tzinfo=timezone.utc)
+    engine = _engine(
+        window_frames=3,
+        minimum_window_frames=1,
+    )
+
+    assert _feed(engine, start=start, count=1) == [MOTION_CODES[0]]
 
 
 def test_temporal_engine_applies_per_motion_cooldown() -> None:
@@ -98,7 +113,9 @@ def test_temporal_engine_resets_window_after_capture_gap() -> None:
     engine = _engine()
     assert _feed(engine, start=start, count=30) == []
 
-    gap_frame = _raw_frame(start + timedelta(seconds=3))
+    # The last fed frame is at roughly 1.93 s. Use a gap larger than the
+    # default 1.5-second capture-gap tolerance.
+    gap_frame = _raw_frame(start + timedelta(seconds=4))
     assert engine.update(gap_frame) == ()
     assert engine.sampled_frame_count == 1
 

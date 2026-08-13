@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import math
 import os
 import signal
 import time
@@ -11,9 +13,13 @@ from datetime import datetime
 from pathlib import Path
 from threading import Event
 
+from gesture_recognition.domain.models import LandmarkFrame
 from gesture_recognition.gestures.registry import default_engine
 from gesture_recognition.inference.mediapipe_detector import MediaPipeDetector
 from gesture_recognition.stream.mjpeg import MjpegFrameSource, MjpegSourceStatus
+
+
+logger = logging.getLogger(__name__)
 
 
 MOTION_NAMES = {
@@ -43,11 +49,154 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("data/monitor_detections_live.json"),
     )
+    parser.add_argument(
+        "--overlay-path",
+        type=Path,
+        default=Path("data/monitor_landmarks.jpg"),
+        help="Path for the latest MediaPipe landmark overlay JPEG",
+    )
     return parser.parse_args()
 
 
 def _format_timestamp(value: datetime) -> str:
     return value.astimezone().strftime("%H:%M:%S")
+
+
+_POSE_CONNECTIONS = (
+    ("NOSE", "LEFT_EYE_INNER"),
+    ("LEFT_EYE_INNER", "LEFT_EYE"),
+    ("LEFT_EYE", "LEFT_EYE_OUTER"),
+    ("LEFT_EYE_OUTER", "LEFT_EAR"),
+    ("NOSE", "RIGHT_EYE_INNER"),
+    ("RIGHT_EYE_INNER", "RIGHT_EYE"),
+    ("RIGHT_EYE", "RIGHT_EYE_OUTER"),
+    ("RIGHT_EYE_OUTER", "RIGHT_EAR"),
+    ("MOUTH_LEFT", "MOUTH_RIGHT"),
+    ("LEFT_SHOULDER", "RIGHT_SHOULDER"),
+    ("LEFT_SHOULDER", "LEFT_ELBOW"),
+    ("LEFT_ELBOW", "LEFT_WRIST"),
+    ("LEFT_WRIST", "LEFT_PINKY"),
+    ("LEFT_WRIST", "LEFT_INDEX"),
+    ("LEFT_WRIST", "LEFT_THUMB"),
+    ("RIGHT_SHOULDER", "RIGHT_ELBOW"),
+    ("RIGHT_ELBOW", "RIGHT_WRIST"),
+    ("RIGHT_WRIST", "RIGHT_PINKY"),
+    ("RIGHT_WRIST", "RIGHT_INDEX"),
+    ("RIGHT_WRIST", "RIGHT_THUMB"),
+    ("LEFT_SHOULDER", "LEFT_HIP"),
+    ("RIGHT_SHOULDER", "RIGHT_HIP"),
+    ("LEFT_HIP", "RIGHT_HIP"),
+    ("LEFT_HIP", "LEFT_KNEE"),
+    ("LEFT_KNEE", "LEFT_ANKLE"),
+    ("LEFT_ANKLE", "LEFT_HEEL"),
+    ("LEFT_ANKLE", "LEFT_FOOT_INDEX"),
+    ("RIGHT_HIP", "RIGHT_KNEE"),
+    ("RIGHT_KNEE", "RIGHT_ANKLE"),
+    ("RIGHT_ANKLE", "RIGHT_HEEL"),
+    ("RIGHT_ANKLE", "RIGHT_FOOT_INDEX"),
+)
+
+_HAND_CONNECTIONS = (
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 4),
+    (0, 5),
+    (5, 6),
+    (6, 7),
+    (7, 8),
+    (0, 9),
+    (9, 10),
+    (10, 11),
+    (11, 12),
+    (0, 13),
+    (13, 14),
+    (14, 15),
+    (15, 16),
+    (0, 17),
+    (17, 18),
+    (18, 19),
+    (19, 20),
+    (5, 9),
+    (9, 13),
+    (13, 17),
+)
+
+
+def _write_landmark_overlay(
+    path: Path,
+    frame_data: bytes,
+    landmarks: LandmarkFrame,
+) -> None:
+    """Write the latest camera frame with MediaPipe points drawn on it."""
+
+    import cv2
+    import numpy as np
+
+    image = cv2.imdecode(
+        np.frombuffer(frame_data, dtype=np.uint8),
+        cv2.IMREAD_COLOR,
+    )
+    if image is None:
+        raise ValueError("frame does not contain a decodable JPEG image")
+
+    height, width = image.shape[:2]
+    # The monitor should show only the inferred landmarks, not the camera image.
+    image = np.zeros_like(image)
+
+    def point(landmark: object) -> tuple[int, int] | None:
+        x = float(getattr(landmark, "x"))
+        y = float(getattr(landmark, "y"))
+        if not math.isfinite(x) or not math.isfinite(y):
+            return None
+        if not -0.1 <= x <= 1.1 or not -0.1 <= y <= 1.1:
+            return None
+        return (
+            max(0, min(width - 1, int(round(x * width)))),
+            max(0, min(height - 1, int(round(y * height)))),
+        )
+
+    pose_points = {
+        name: point(landmark)
+        for name, landmark in landmarks.pose.items()
+    }
+    for item in pose_points.values():
+        if item is not None:
+            cv2.circle(image, item, 5, (40, 220, 90), -1, cv2.LINE_AA)
+
+    hand_count = 0
+    hand_point_count = 0
+    for hand in landmarks.hands:
+        hand_count += 1
+        hand_points = [point(item) for item in hand.landmarks]
+        hand_point_count += sum(item is not None for item in hand_points)
+        color = (
+            (255, 180, 40)
+            if hand.handedness.lower() == "right"
+            else (40, 180, 255)
+        )
+        for item in hand_points:
+            if item is not None:
+                cv2.circle(image, item, 4, color, -1, cv2.LINE_AA)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    success, encoded = cv2.imencode(
+        ".jpg",
+        image,
+        [cv2.IMWRITE_JPEG_QUALITY, 85],
+    )
+    if not success:
+        raise RuntimeError("failed to encode landmark overlay JPEG")
+    temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    temporary.write_bytes(encoded.tobytes())
+    for attempt in range(5):
+        try:
+            temporary.replace(path)
+            break
+        except PermissionError:
+            if attempt == 4:
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 def _write_state(
@@ -56,6 +205,7 @@ def _write_state(
     status: str,
     history: list[dict[str, object]],
     camera_status: MjpegSourceStatus | None = None,
+    landmark_status: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -65,6 +215,7 @@ def _write_state(
         "camera": (
             None if camera_status is None else camera_status.to_payload()
         ),
+        "landmarks": landmark_status,
         "latest": history[-1] if history else None,
         "history": list(reversed(history[-50:])),
     }
@@ -105,6 +256,7 @@ def main() -> None:
     engine = default_engine()
     sequence = 0
     history: list[dict[str, object]] = []
+    landmark_status: dict[str, object] | None = None
 
     source.start()
     _write_state(
@@ -112,6 +264,7 @@ def main() -> None:
         status="running",
         history=history,
         camera_status=source.get_status(),
+        landmark_status=landmark_status,
     )
     next_state_write = time.monotonic()
     try:
@@ -123,6 +276,7 @@ def main() -> None:
                     status="running",
                     history=history,
                     camera_status=source.get_status(),
+                    landmark_status=landmark_status,
                 )
                 next_state_write = now + 0.5
 
@@ -137,8 +291,27 @@ def main() -> None:
             except ValueError:
                 continue
 
+            landmark_status = {
+                "captured_at": landmarks.captured_at.isoformat(),
+                "pose_points": len(landmarks.pose),
+                "hand_count": len(landmarks.hands),
+                "hand_points": sum(
+                    len(hand.landmarks) for hand in landmarks.hands
+                ),
+            }
+            try:
+                _write_landmark_overlay(
+                    args.overlay_path,
+                    frame.data,
+                    landmarks,
+                )
+            except Exception as exc:  # noqa: BLE001 - overlay must not stop recognition
+                logger.warning("landmark overlay update failed: %s", exc)
+
             for detection in engine.update(landmarks):
                 name = MOTION_NAMES.get(detection.motion_code, detection.motion_code)
+                landmark_status["motion_code"] = detection.motion_code
+                landmark_status["confidence"] = round(detection.confidence, 4)
                 history.append(
                     {
                         "captured_at": landmarks.captured_at.isoformat(),
@@ -152,6 +325,7 @@ def main() -> None:
                     status="running",
                     history=history,
                     camera_status=source.get_status(),
+                    landmark_status=landmark_status,
                 )
                 print(
                     f"{_format_timestamp(landmarks.captured_at)} | "
@@ -166,6 +340,7 @@ def main() -> None:
             status="stopped",
             history=history,
             camera_status=source.get_status(),
+            landmark_status=landmark_status,
         )
 
 

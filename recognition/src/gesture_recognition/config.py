@@ -34,7 +34,7 @@ class Settings:
     knn_k: int = 3
     confirmation_count: int = 2
     recognition_cooldown_seconds: float = 1.0
-    recognition_reset_gap_seconds: float = 0.75
+    recognition_reset_gap_seconds: float = 1.5
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -88,7 +88,7 @@ class Settings:
             values, "RECOGNITION_COOLDOWN_SECONDS", 1.0
         )
         recognition_reset_gap = _positive_float(
-            values, "RECOGNITION_RESET_GAP_SECONDS", 0.75
+            values, "RECOGNITION_RESET_GAP_SECONDS", 1.5
         )
 
         return cls(
