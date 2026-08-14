@@ -736,6 +736,29 @@ class TemplateSet:
         thresholds = {str(code): float(value) for code, value in raw_thresholds.items()}
         return cls(tuple(templates), thresholds, schema_version)
 
+    def excluding(self, motion_codes: Iterable[str]) -> "TemplateSet":
+        """Return a template set without the requested motion codes."""
+
+        disabled = frozenset(
+            code.strip() for code in motion_codes if code.strip()
+        )
+        if not disabled:
+            return self
+
+        templates = tuple(
+            template
+            for template in self.templates
+            if template.motion_code not in disabled
+        )
+        if not templates:
+            raise ValueError("cannot disable all motion templates")
+        thresholds = {
+            motion_code: threshold
+            for motion_code, threshold in self.thresholds.items()
+            if motion_code not in disabled
+        }
+        return TemplateSet(templates, thresholds, self.schema_version)
+
     def to_json_object(self) -> dict[str, Any]:
         coordinate_scale = 1000.0
         return {

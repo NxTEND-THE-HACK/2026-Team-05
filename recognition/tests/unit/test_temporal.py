@@ -245,6 +245,20 @@ def test_template_set_roundtrips_compressed_frames(tmp_path) -> None:
     assert loaded.templates[0].frames[0][0] == (0.25, 0.25, 0.25)
 
 
+def test_template_set_can_exclude_disabled_motions() -> None:
+    first_code = MOTION_CODES[0]
+    second_code = MOTION_CODES[1]
+    template_set = TemplateSet(
+        (_template(first_code, 0.0), _template(second_code, 0.5)),
+        {first_code: 0.35, second_code: 0.45},
+    )
+
+    filtered = template_set.excluding((first_code,))
+
+    assert [template.motion_code for template in filtered.templates] == [second_code]
+    assert filtered.thresholds == {second_code: 0.45}
+
+
 def test_numpy_knn_distance_matches_reference_dtw() -> None:
     try:
         import numpy  # noqa: F401

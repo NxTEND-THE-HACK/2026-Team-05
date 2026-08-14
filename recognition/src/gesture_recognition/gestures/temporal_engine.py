@@ -121,9 +121,11 @@ class TemporalGestureEngine:
     def from_template_file(
         cls,
         path: str | Path,
+        *,
+        disabled_motions: Iterable[str] = (),
         **kwargs: object,
     ) -> "TemporalGestureEngine":
-        template_set = TemplateSet.from_json(path)
+        template_set = TemplateSet.from_json(path).excluding(disabled_motions)
         window_frames = int(kwargs.get("window_frames", 30))
         kwargs.setdefault(
             "minimum_window_frames",

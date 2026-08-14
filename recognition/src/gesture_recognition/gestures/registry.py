@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 
 from .base import GestureEngineLike
@@ -29,8 +30,16 @@ DEFAULT_TEMPLATE_PATH = (
 )
 
 
-def default_rules() -> tuple[GestureRule, ...]:
-    return (
+def default_rules(
+    *,
+    disabled_motions: Iterable[str] = (),
+) -> tuple[GestureRule, ...]:
+    disabled = frozenset(
+        motion_code.strip()
+        for motion_code in disabled_motions
+        if motion_code.strip()
+    )
+    rules = (
         RightHandRaisedRule(),
         LeftHandRaisedRule(),
         SwipeRightRule(),
@@ -43,11 +52,13 @@ def default_rules() -> tuple[GestureRule, ...]:
         HandRotateRightRule(),
         HandRotateLeftRule(),
     )
+    return tuple(rule for rule in rules if rule.motion_code not in disabled)
 
 
 def default_engine(
     *,
     templates_path: str | Path | None = None,
+    disabled_motions: Iterable[str] = (),
     **temporal_options: object,
 ) -> GestureEngineLike:
     """Return the temporal engine when templates are available.
@@ -59,13 +70,17 @@ def default_engine(
 
     path = _resolve_template_path(templates_path)
     if path.is_file():
-        return TemporalGestureEngine.from_template_file(path, **temporal_options)
+        return TemporalGestureEngine.from_template_file(
+            path,
+            disabled_motions=disabled_motions,
+            **temporal_options,
+        )
 
     logger.warning(
         "motion template file not found; using legacy gesture rules path=%s",
         path,
     )
-    return GestureEngine(default_rules())
+    return GestureEngine(default_rules(disabled_motions=disabled_motions))
 
 
 def _resolve_template_path(templates_path: str | Path | None) -> Path:

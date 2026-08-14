@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from gesture_recognition.domain.models import HandObservation, Landmark, LandmarkFrame
 from gesture_recognition.gestures.engine import GestureEngine
-from gesture_recognition.gestures.registry import default_engine
+from gesture_recognition.gestures.registry import default_engine, default_rules
 from gesture_recognition.gestures.rules import (
     ClapRule,
     FingerSnapRule,
@@ -172,6 +172,21 @@ def test_engine_rejects_duplicate_codes() -> None:
 def test_default_engine_registers_every_rule_with_a_unique_code() -> None:
     engine = default_engine()
     assert engine is not None
+
+
+def test_default_rules_can_disable_selected_motions() -> None:
+    rules = default_rules(
+        disabled_motions=(
+            "MOTION_CLAP",
+            "MOTION_HAND_ROTATE_RIGHT",
+            "MOTION_HAND_ROTATE_LEFT",
+        )
+    )
+    codes = {rule.motion_code for rule in rules}
+
+    assert "MOTION_CLAP" not in codes
+    assert "MOTION_HAND_ROTATE_RIGHT" not in codes
+    assert "MOTION_HAND_ROTATE_LEFT" not in codes
 
 
 def test_engine_resets_rules_after_a_capture_gap() -> None:

@@ -22,6 +22,11 @@ started for each camera.
 ```text
 CAMERA_ID=demo-camera-1
 CAMERA_SOURCE=http://192.168.50.21/stream
+# For a temporary local-camera test, set CAMERA_WEBCAM_INDEX=0 instead.
+CAMERA_WEBCAM_INDEX=
+CAMERA_WEBCAM_PROFILE=micon
+CAMERA_WEBCAM_FPS=15
+CAMERA_WEBCAM_JPEG_QUALITY=80
 GO_API_URL=http://192.168.50.11:8080/internal/detections
 ```
 
@@ -39,10 +44,18 @@ them on the demo machine or build them into the Docker image. Override
 
 ## Runtime architecture
 
-One worker process is started per camera. `CAMERA_SOURCE` must be an HTTP
-MJPEG URL, so an ESP32 camera and the Windows demo PC can use the same input
-path. The Windows PC should expose its webcam as an MJPEG stream; the worker
-does not store video.
+One worker process is started per camera. The default input is the HTTP MJPEG
+URL in `CAMERA_SOURCE`. For temporary local testing, set
+`CAMERA_WEBCAM_INDEX` to a Windows camera index; the explicit local-camera
+setting takes precedence over `CAMERA_SOURCE`. The worker does not store video.
+
+When `CAMERA_WEBCAM_PROFILE=micon`, local frames are center-cropped to 4:3,
+resized to 800x600, capped at 15 FPS, and encoded with OpenCV JPEG quality 80.
+The ESP32 quality value and OpenCV quality value are different scales, so this
+is a practical approximation of the firmware's quality 8 setting. The actual
+local receive FPS is reported by the monitor and state file. Override the
+local output rate or JPEG quality with `CAMERA_WEBCAM_FPS` and
+`CAMERA_WEBCAM_JPEG_QUALITY` when matching a measured device rate.
 
 ```text
 MJPEG URL -> latest-frame buffer -> MediaPipe Pose + Hands
@@ -181,6 +194,18 @@ PYTHONPATH=src python scripts/monitor_detections.py \
   --camera-source http://10.0.1.107/stream
 ```
 
+For a USB or built-in camera, use the local-camera compatibility profile:
+
+```powershell
+$env:CAMERA_WEBCAM_INDEX = "0"
+$env:CAMERA_WEBCAM_PROFILE = "micon"
+$env:PYTHONPATH = "src"
+python scripts/monitor_detections.py --webcam-index 0 --camera-profile micon
+```
+
+The monitor prints source, connection state, output size, target FPS, and
+measured receive FPS. Its state JSON contains the same camera information.
+
 The monitor dashboard also shows camera connection status. This status is
 kept inside the Python process and is not sent to the Go API. The status is
 based on actual MJPEG frame reception:
@@ -202,6 +227,18 @@ CAMERA_SOURCE=http://192.168.50.21/stream \
 GO_API_URL=http://192.168.50.11:8080/internal/detections \
 python -m gesture_recognition.main
 ```
+
+To run the normal worker from a local camera without sending detection events
+to Go:
+
+```powershell
+$env:CAMERA_WEBCAM_INDEX = "0"
+$env:CAMERA_WEBCAM_PROFILE = "micon"
+python -m gesture_recognition.main --no-delivery
+```
+
+Landmark recording also accepts `--webcam-index 0 --camera-profile micon` in
+place of `--camera-source`.
 
 For two cameras, start two processes with different `CAMERA_ID` and
 `CAMERA_SOURCE` values. The worker keeps only the newest frame, reconnects

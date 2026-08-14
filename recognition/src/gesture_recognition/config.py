@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass
 from collections.abc import Mapping
 
+from .stream.profile import get_webcam_profile
+
 
 class ConfigurationError(ValueError):
     """Raised when required worker configuration is missing or invalid."""
@@ -14,8 +16,12 @@ class ConfigurationError(ValueError):
 @dataclass(frozen=True, slots=True)
 class Settings:
     camera_id: str
-    camera_source: str
+    camera_source: str | None
     go_api_url: str
+    webcam_index: int | None = None
+    webcam_profile: str = "micon"
+    webcam_fps: float = 15.0
+    webcam_jpeg_quality: int = 80
     log_level: str = "INFO"
     reconnect_initial_seconds: float = 1.0
     reconnect_max_seconds: float = 30.0
@@ -41,10 +47,33 @@ class Settings:
         values = os.environ if env is None else env
 
         camera_id = _required(values, "CAMERA_ID")
-        camera_source = _required(values, "CAMERA_SOURCE")
+        camera_source = values.get("CAMERA_SOURCE", "").strip() or None
+        webcam_index = _optional_non_negative_int(values, "CAMERA_WEBCAM_INDEX")
+        if camera_source is None and webcam_index is None:
+            raise ConfigurationError(
+                "CAMERA_SOURCE is required unless CAMERA_WEBCAM_INDEX is set"
+            )
         go_api_url = values.get(
             "GO_API_URL", "http://127.0.0.1:8080/internal/detections"
         )
+
+        webcam_profile = values.get("CAMERA_WEBCAM_PROFILE", "micon").strip().lower()
+        webcam_fps = _positive_float(values, "CAMERA_WEBCAM_FPS", 15.0)
+        webcam_jpeg_quality = _bounded_int(
+            values,
+            "CAMERA_WEBCAM_JPEG_QUALITY",
+            80,
+            minimum=1,
+            maximum=100,
+        )
+        try:
+            get_webcam_profile(
+                webcam_profile,
+                target_fps=webcam_fps,
+                jpeg_quality=webcam_jpeg_quality,
+            )
+        except ValueError as exc:
+            raise ConfigurationError(str(exc)) from exc
 
         initial = _positive_float(values, "RECONNECT_INITIAL_SECONDS", 1.0)
         maximum = _positive_float(values, "RECONNECT_MAX_SECONDS", 30.0)
@@ -95,6 +124,10 @@ class Settings:
             camera_id=camera_id,
             camera_source=camera_source,
             go_api_url=go_api_url,
+            webcam_index=webcam_index,
+            webcam_profile=webcam_profile,
+            webcam_fps=webcam_fps,
+            webcam_jpeg_quality=webcam_jpeg_quality,
             log_level=values.get("LOG_LEVEL", "INFO").upper(),
             reconnect_initial_seconds=initial,
             reconnect_max_seconds=maximum,
@@ -143,6 +176,21 @@ def _positive_float(
         raise ConfigurationError(f"{key} must be a number") from exc
     if value <= 0:
         raise ConfigurationError(f"{key} must be greater than zero")
+    return value
+
+
+def _optional_non_negative_int(
+    values: Mapping[str, str], key: str
+) -> int | None:
+    raw = values.get(key)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ConfigurationError(f"{key} must be an integer") from exc
+    if value < 0:
+        raise ConfigurationError(f"{key} must not be negative")
     return value
 
 
@@ -199,4 +247,24 @@ def _positive_int(values: Mapping[str, str], key: str, default: int) -> int:
         raise ConfigurationError(f"{key} must be an integer") from exc
     if value <= 0:
         raise ConfigurationError(f"{key} must be greater than zero")
+    return value
+
+
+def _bounded_int(
+    values: Mapping[str, str],
+    key: str,
+    default: int,
+    *,
+    minimum: int,
+    maximum: int,
+) -> int:
+    raw = values.get(key)
+    try:
+        value = default if raw is None else int(raw)
+    except ValueError as exc:
+        raise ConfigurationError(f"{key} must be an integer") from exc
+    if not minimum <= value <= maximum:
+        raise ConfigurationError(
+            f"{key} must be between {minimum} and {maximum}"
+        )
     return value

@@ -15,6 +15,10 @@ def test_settings_load_required_values() -> None:
     assert settings.camera_id == "camera-1"
     assert settings.camera_source == "http://camera/stream"
     assert settings.go_api_url == "http://go/internal/detections"
+    assert settings.webcam_index is None
+    assert settings.webcam_profile == "micon"
+    assert settings.webcam_fps == 15.0
+    assert settings.webcam_jpeg_quality == 80
     assert settings.reconnect_initial_seconds == 1.0
     assert settings.pose_model_path == "models/pose_landmarker_full.task"
     assert settings.hand_model_path == "models/hand_landmarker.task"
@@ -60,6 +64,44 @@ def test_settings_load_temporal_recognition_overrides() -> None:
     assert settings.recognition_reset_gap_seconds == 0.9
     assert settings.motion_samples_path == "custom/templates.json"
     assert settings.camera_stale_after_seconds == 4.5
+
+
+def test_settings_load_local_webcam_configuration() -> None:
+    settings = Settings.from_env(
+        {
+            "CAMERA_ID": "camera-1",
+            "CAMERA_WEBCAM_INDEX": "2",
+            "CAMERA_WEBCAM_PROFILE": "micon",
+            "CAMERA_WEBCAM_FPS": "12",
+            "CAMERA_WEBCAM_JPEG_QUALITY": "70",
+        }
+    )
+
+    assert settings.camera_source is None
+    assert settings.webcam_index == 2
+    assert settings.webcam_profile == "micon"
+    assert settings.webcam_fps == 12.0
+    assert settings.webcam_jpeg_quality == 70
+
+
+def test_settings_reject_missing_camera_input() -> None:
+    with pytest.raises(
+        ConfigurationError,
+        match="CAMERA_SOURCE is required unless CAMERA_WEBCAM_INDEX is set",
+    ):
+        Settings.from_env({"CAMERA_ID": "camera-1"})
+
+
+def test_settings_reject_invalid_webcam_values() -> None:
+    base = {"CAMERA_ID": "camera-1", "CAMERA_WEBCAM_INDEX": "0"}
+    for key, value in (
+        ("CAMERA_WEBCAM_INDEX", "-1"),
+        ("CAMERA_WEBCAM_FPS", "0"),
+        ("CAMERA_WEBCAM_JPEG_QUALITY", "101"),
+        ("CAMERA_WEBCAM_PROFILE", "unknown"),
+    ):
+        with pytest.raises(ConfigurationError):
+            Settings.from_env({**base, key: value})
 
 
 def test_settings_reject_invalid_temporal_values() -> None:

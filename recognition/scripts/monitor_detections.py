@@ -16,10 +16,13 @@ from threading import Event
 from gesture_recognition.domain.models import LandmarkFrame
 from gesture_recognition.gestures.registry import default_engine
 from gesture_recognition.inference.mediapipe_detector import MediaPipeDetector
-from gesture_recognition.stream.mjpeg import MjpegFrameSource, MjpegSourceStatus
+from gesture_recognition.stream.base import SourceStatus
+from gesture_recognition.stream.factory import create_frame_source
 
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_CAMERA_SOURCE = "http://10.0.1.107/stream"
 
 
 MOTION_NAMES = {
@@ -39,7 +42,40 @@ MOTION_NAMES = {
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--camera-source", default="http://10.0.1.107/stream")
+    parser.add_argument(
+        "--camera-source",
+        default=None,
+        help="HTTP MJPEG URL (default: the configured demo camera URL)",
+    )
+    parser.add_argument(
+        "--webcam-index",
+        type=int,
+        help="Open a local USB or built-in camera instead of MJPEG",
+    )
+    parser.add_argument(
+        "--camera-profile",
+        default="micon",
+        help="Local-camera output profile (default: micon)",
+    )
+    parser.add_argument(
+        "--camera-fps",
+        type=float,
+        help="Override the local-camera output FPS",
+    )
+    parser.add_argument(
+        "--jpeg-quality",
+        type=int,
+        help="Override the local-camera OpenCV JPEG quality (1-100)",
+    )
+    parser.add_argument(
+        "--disable-motion",
+        dest="disabled_motions",
+        action="append",
+        choices=tuple(MOTION_NAMES),
+        default=[],
+        metavar="MOTION_CODE",
+        help="Disable a motion code; repeat this option for multiple motions",
+    )
     parser.add_argument("--pose-model-path", default="models/pose_landmarker_full.task")
     parser.add_argument("--hand-model-path", default="models/hand_landmarker.task")
     parser.add_argument("--poll-interval", type=float, default=0.01)
@@ -204,7 +240,7 @@ def _write_state(
     *,
     status: str,
     history: list[dict[str, object]],
-    camera_status: MjpegSourceStatus | None = None,
+    camera_status: SourceStatus | None = None,
     landmark_status: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -236,48 +272,109 @@ def _write_state(
             time.sleep(0.05 * (attempt + 1))
 
 
+def _print_camera_status(
+    status: SourceStatus,
+    previous_signature: tuple[object, ...] | None = None,
+) -> tuple[object, ...]:
+    payload = status.to_payload()
+    signature = (
+        payload.get("source_type"),
+        payload.get("profile"),
+        payload.get("device_index"),
+        payload.get("state"),
+        payload.get("receive_fps"),
+        payload.get("target_fps"),
+        payload.get("frame_width"),
+        payload.get("frame_height"),
+    )
+    if signature != previous_signature:
+        target_fps = payload.get("target_fps")
+        fps_text = f"{payload.get('receive_fps', 0)}"
+        if target_fps is not None:
+            fps_text += f"/{target_fps}"
+        print(
+            "[camera] "
+            f"source={payload.get('source_type')} "
+            f"profile={payload.get('profile') or '-'} "
+            f"state={payload.get('state')} "
+            f"fps={fps_text} "
+            f"size={payload.get('frame_width') or '-'}x{payload.get('frame_height') or '-'}",
+            flush=True,
+        )
+    return signature
+
+
 def main() -> None:
     args = _parse_args()
     if args.poll_interval <= 0 or args.stale_after_seconds <= 0:
         raise SystemExit("poll and stale thresholds must be positive")
+    if args.camera_source is not None and args.webcam_index is not None:
+        raise SystemExit("--camera-source and --webcam-index cannot be combined")
+    if args.webcam_index is not None and args.webcam_index < 0:
+        raise SystemExit("--webcam-index must not be negative")
+    if args.camera_fps is not None and args.camera_fps <= 0:
+        raise SystemExit("--camera-fps must be positive")
+    if args.jpeg_quality is not None and not 1 <= args.jpeg_quality <= 100:
+        raise SystemExit("--jpeg-quality must be between 1 and 100")
 
     stop_event = Event()
     signal.signal(signal.SIGINT, lambda *_: stop_event.set())
     signal.signal(signal.SIGTERM, lambda *_: stop_event.set())
 
-    source = MjpegFrameSource(
-        args.camera_source,
-        stale_after_seconds=args.stale_after_seconds,
-    )
+    try:
+        source = create_frame_source(
+            camera_source=args.camera_source or DEFAULT_CAMERA_SOURCE,
+            webcam_index=args.webcam_index,
+            webcam_profile=args.camera_profile,
+            webcam_fps=args.camera_fps,
+            webcam_jpeg_quality=args.jpeg_quality,
+            stale_after_seconds=args.stale_after_seconds,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     detector = MediaPipeDetector(
         pose_model_path=args.pose_model_path,
         hand_model_path=args.hand_model_path,
     )
-    engine = default_engine()
+    engine = default_engine(disabled_motions=args.disabled_motions)
     sequence = 0
     history: list[dict[str, object]] = []
     landmark_status: dict[str, object] | None = None
 
+    if args.disabled_motions:
+        print(
+            "[motion] disabled=" + ",".join(args.disabled_motions),
+            flush=True,
+        )
+
     source.start()
+    initial_camera_status = source.get_status()
     _write_state(
         args.state_path,
         status="running",
         history=history,
-        camera_status=source.get_status(),
+        camera_status=initial_camera_status,
         landmark_status=landmark_status,
     )
+    last_status_signature = _print_camera_status(initial_camera_status)
     next_state_write = time.monotonic()
     try:
         while not stop_event.is_set():
             now = time.monotonic()
             if now >= next_state_write:
+                camera_status = source.get_status()
                 _write_state(
                     args.state_path,
                     status="running",
                     history=history,
-                    camera_status=source.get_status(),
+                    camera_status=camera_status,
                     landmark_status=landmark_status,
                 )
+                status_signature = _print_camera_status(
+                    camera_status,
+                    last_status_signature,
+                )
+                last_status_signature = status_signature
                 next_state_write = now + 0.5
 
             frame = source.read_latest(after_sequence=sequence)

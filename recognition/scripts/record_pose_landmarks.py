@@ -11,7 +11,7 @@ from threading import Event
 
 from gesture_recognition.domain.models import HandObservation, Landmark, LandmarkFrame
 from gesture_recognition.inference.mediapipe_detector import MediaPipeDetector
-from gesture_recognition.stream.mjpeg import MjpegFrameSource
+from gesture_recognition.stream.factory import create_frame_source
 
 logger = logging.getLogger("pose-recorder")
 
@@ -48,9 +48,13 @@ def _frame_to_record(frame: LandmarkFrame, label: str, sequence: int) -> dict[st
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Record MediaPipe landmarks from an MJPEG camera stream."
+        description="Record MediaPipe landmarks from an MJPEG or local camera."
     )
-    parser.add_argument("--camera-source", required=True)
+    parser.add_argument("--camera-source")
+    parser.add_argument("--webcam-index", type=int)
+    parser.add_argument("--camera-profile", default="micon")
+    parser.add_argument("--camera-fps", type=float)
+    parser.add_argument("--jpeg-quality", type=int)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--label", default="POSE_RIGHT_HAND_UP")
     parser.add_argument(
@@ -58,13 +62,24 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--hand-model-path", default="models/hand_landmarker.task")
     parser.add_argument("--poll-interval", type=float, default=0.01)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.camera_source is None and args.webcam_index is None:
+        parser.error("one of --camera-source or --webcam-index is required")
+    if args.camera_source is not None and args.webcam_index is not None:
+        parser.error("--camera-source and --webcam-index cannot be combined")
+    return args
 
 
 def main() -> None:
     args = _parse_args()
     if args.poll_interval <= 0:
         raise SystemExit("--poll-interval must be positive")
+    if args.webcam_index is not None and args.webcam_index < 0:
+        raise SystemExit("--webcam-index must not be negative")
+    if args.camera_fps is not None and args.camera_fps <= 0:
+        raise SystemExit("--camera-fps must be positive")
+    if args.jpeg_quality is not None and not 1 <= args.jpeg_quality <= 100:
+        raise SystemExit("--jpeg-quality must be between 1 and 100")
 
     logging.basicConfig(
         level=logging.INFO,
@@ -76,7 +91,16 @@ def main() -> None:
     signal.signal(signal.SIGINT, lambda *_: stop_event.set())
     signal.signal(signal.SIGTERM, lambda *_: stop_event.set())
 
-    source = MjpegFrameSource(args.camera_source)
+    try:
+        source = create_frame_source(
+            camera_source=args.camera_source,
+            webcam_index=args.webcam_index,
+            webcam_profile=args.camera_profile,
+            webcam_fps=args.camera_fps,
+            webcam_jpeg_quality=args.jpeg_quality,
+        )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     detector = MediaPipeDetector(
         pose_model_path=args.pose_model_path,
         hand_model_path=args.hand_model_path,
