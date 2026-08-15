@@ -15,7 +15,7 @@ import type {
 } from "~/types/backendApi";
 
 const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"
+  import.meta.env?.VITE_API_BASE_URL ?? "http://localhost:8080"
 ).replace(/\/$/, "");
 
 interface ApiErrorBody {
@@ -41,6 +41,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // Keep the HTTP status when the response is not JSON.
     }
     throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return (await response.json()) as T;
@@ -77,6 +81,12 @@ export function saveBinding(
   return request<MotionBinding>("/api/bindings", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+export function deleteBinding(bindingId: string): Promise<void> {
+  return request<void>(`/api/bindings/${encodeURIComponent(bindingId)}`, {
+    method: "DELETE",
   });
 }
 
