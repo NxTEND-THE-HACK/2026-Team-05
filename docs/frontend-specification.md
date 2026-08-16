@@ -324,6 +324,7 @@ front/app/
 | POST | `/api/actions/:id/execute` | Manual Control |
 | GET | `/api/bindings` | Bindings, Detail |
 | POST | `/api/bindings` | New Motion / バインディング作成 |
+| DELETE | `/api/bindings/:id` | Bindings / バインディング削除 |
 | GET | `/api/logs?limit=` | Dashboard, Logs |
 
 認証: 現行フロントは API キー/トークンを付与しない（バックエンドがローカル前提の場合に合わせる）。
@@ -334,7 +335,7 @@ front/app/
 
 | 項目 | フロントの扱い | 依存 |
 |---|---|---|
-| `DELETE /api/bindings/:id` | Del で warning のみ。削除API呼び出しは未接続 | フロント実装待ち |
+| `DELETE /api/bindings/:id` | Del の確認後に削除APIを呼び出し、成功後に一覧を再取得 | — |
 | `GET /api/appliances/:id` | 一覧フィルタで代替 | BE 任意 |
 | ログ confidence / 詳細エラー | フィールドがあれば表示拡張可。現状は API 応答範囲 | BE |
 | カメラ死活の高精度表示 | 専用 API なし。既存フィールド頼み | BE / micon |

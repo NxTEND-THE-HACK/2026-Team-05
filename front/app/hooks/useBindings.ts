@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { MotionBinding, CreateBindingRequest } from "~/types/backendApi";
-import { request } from "~/services/backendApiClient";
+import { deleteBinding, request } from "~/services/backendApiClient";
 import { queryKeys } from "./queryKeys";
 
 export function useBindings() {
@@ -22,6 +22,17 @@ export function useCreateBinding() {
         method: "POST",
         body: JSON.stringify(input),
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.bindings });
+    },
+  });
+}
+
+export function useDeleteBinding() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bindingId: string) => deleteBinding(bindingId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.bindings });
     },

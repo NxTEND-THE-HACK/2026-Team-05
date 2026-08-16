@@ -14,7 +14,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import { useMotions } from "~/hooks/useMotions";
 import { useAppliances } from "~/hooks/useAppliances";
 import { useActions } from "~/hooks/useActions";
-import { useBindings } from "~/hooks/useBindings";
+import { useBindings, useDeleteBinding } from "~/hooks/useBindings";
 import { BackToDashboard } from "~/components/common/BackToDashboard";
 import { NewMotionModal } from "../components/dashboard/NewMotionModal";
 import type { MotionBinding, Appliance, Motion, Action } from "~/types/backendApi";
@@ -35,6 +35,7 @@ export function BindingsPage() {
   const { data: appliances = [] } = useAppliances();
   const { data: actions = [] } = useActions();
   const { data: bindings = [], isLoading: bindingsLoading } = useBindings();
+  const deleteMutation = useDeleteBinding();
   const loading = bindingsLoading;
 
   const bindingRows: BindingRow[] = useMemo(
@@ -98,14 +99,23 @@ export function BindingsPage() {
       title: "Del",
       key: "del",
       width: 80,
-      render: () => (
+      render: (_: unknown, row: BindingRow) => (
         <Popconfirm
           title="この紐付けを削除しますか？"
-          onConfirm={() =>
-            message.warning("バインディング削除はバックエンド未対応です")
-          }
+          onConfirm={async () => {
+            try {
+              await deleteMutation.mutateAsync(row.binding.id);
+              message.success("バインディングを削除しました");
+            } catch (error) {
+              message.error(
+                error instanceof Error
+                  ? error.message
+                  : "バインディングの削除に失敗しました",
+              );
+            }
+          }}
         >
-          <Button danger size="small">
+          <Button danger size="small" loading={deleteMutation.isPending}>
             削除
           </Button>
         </Popconfirm>
