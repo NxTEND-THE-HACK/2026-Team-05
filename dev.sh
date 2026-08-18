@@ -97,28 +97,28 @@ need_cmd() {
 if [ "$START_BACKEND" -eq 1 ]; then
   need_cmd go
   if [ ! -f "$ROOT_DIR/backend/.env" ]; then
-    err "backend/.env がありません: cd backend && cp .env.example .env"
+    err "backend/.env がありません。先に ./setup.sh を実行してください"
     fail=1
   fi
 fi
 if [ "$START_FRONT" -eq 1 ]; then
   need_cmd npm
   if [ ! -d "$ROOT_DIR/front/node_modules" ]; then
-    err "front/node_modules がありません: cd front && npm install"
+    err "front/node_modules がありません。先に ./setup.sh を実行してください"
     fail=1
   fi
 fi
 if [ "$START_RECOGNITION" -eq 1 ]; then
   if [ ! -x "$ROOT_DIR/recognition/.venv/bin/python" ]; then
-    err "recognition/.venv がありません。recognition/README.md の Local setup を実行してください"
+    err "recognition/.venv がありません。先に ./setup.sh を実行してください"
     fail=1
   fi
   if [ ! -f "$ROOT_DIR/recognition/.env" ]; then
-    err "recognition/.env がありません: cd recognition && cp .env.example .env してカメラ設定を編集してください"
+    err "recognition/.env がありません。先に ./setup.sh を実行してください"
     fail=1
   fi
   if [ ! -f "$ROOT_DIR/recognition/models/pose_landmarker_full.task" ]; then
-    err "recognition/models にモデルがありません: cd recognition && python scripts/download_models.py --output-dir models"
+    err "recognition/models にモデルがありません。先に ./setup.sh を実行してください"
     fail=1
   fi
   # 既存の認識ワーカーが残っていると検出イベントが二重送信になるため警告する

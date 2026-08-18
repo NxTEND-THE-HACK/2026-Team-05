@@ -33,21 +33,23 @@ backend / front / recognition をまとめて起動します。停止は `Ctrl+C
 ## 初回セットアップ
 
 ```bash
-# backend
-cd backend && cp .env.example .env   # Tuya接続情報などを編集
-
-# front
-cd front && npm install
-
-# recognition
-cd recognition
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev]'
-python scripts/download_models.py --output-dir models
-cp .env.example .env                 # CAMERA_ID / CAMERA_SOURCE を実機に合わせて編集
+./setup.sh
 ```
 
-`recognition/.env` の `CAMERA_SOURCE` にはマイコンのIPを指定します(例: `http://192.168.10.106/stream`)。`CAMERA_ID` はバックエンドの初期データ `demo-camera-1` / `demo-camera-2` と合わせてください。
+`setup.sh` は次を自動で実行します。
+
+- `backend/.env` を `.env.example` から作成(既存ファイルは上書きしない)
+- Goモジュールのダウンロード
+- `front` のnpm依存関係のインストール
+- `recognition/.venv` の作成とPython依存関係のインストール
+- MediaPipeモデルのダウンロード
+
+Go / Node.js / Python 3.11以降の本体は事前に必要です。macOSの場合は次の例でインストールできます。
+
+```bash
+brew install go node python@3.11
+```
+
+`recognition/.env` の `CAMERA_SOURCE` にはマイコンのIPを指定します。初期値は `http://192.168.10.106/stream` です。`CAMERA_ID` はバックエンドの初期データ `demo-camera-1` / `demo-camera-2` と合わせてください。
 
 各サービスの詳細はそれぞれの README(`backend/README.md`、`front/README.md`、`recognition/README.md`、`micon/README.md`)を参照してください。
