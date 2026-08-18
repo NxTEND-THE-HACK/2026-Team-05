@@ -176,6 +176,51 @@ func TestLogStreamSendsPersistedLogs(t *testing.T) {
 	}
 }
 
+func TestLogStreamClosesWhenLogHubCloses(t *testing.T) {
+	repository := store.NewMemory(store.DefaultSeed(time.Now()))
+	logHub := events.NewLogHub()
+	server := New(
+		repository,
+		service.New(repository, executor.NewRegistry(&recordingExecutor{}), 0, logHub),
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		[]string{"*"},
+		logHub,
+	)
+	httpServer := httptest.NewServer(server)
+	defer httpServer.Close()
+
+	response, err := http.Get(httpServer.URL + "/api/logs/stream")
+	if err != nil {
+		t.Fatalf("GET /api/logs/stream error = %v", err)
+	}
+	defer response.Body.Close()
+
+	reader := bufio.NewReader(response.Body)
+	event, _, err := readSSEEvent(reader)
+	if err != nil {
+		t.Fatalf("read connected event: %v", err)
+	}
+	if event != "connected" {
+		t.Fatalf("first event = %q, want connected", event)
+	}
+
+	logHub.Close()
+	readDone := make(chan error, 1)
+	go func() {
+		_, err := reader.ReadString('\n')
+		readDone <- err
+	}()
+
+	select {
+	case err := <-readDone:
+		if err == nil {
+			t.Fatal("SSE stream remained open after log hub close")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("SSE stream did not close after log hub close")
+	}
+}
+
 func readSSEEvent(reader *bufio.Reader) (string, string, error) {
 	var event string
 	var data string

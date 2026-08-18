@@ -13,6 +13,7 @@ type LogHub struct {
 	mu          sync.Mutex
 	nextID      uint64
 	subscribers map[uint64]chan domain.ActionLog
+	closed      bool
 }
 
 type LogSubscription struct {
@@ -28,12 +29,17 @@ func (h *LogHub) Subscribe() LogSubscription {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	channel := make(chan domain.ActionLog, logSubscriberBuffer)
+	if h.closed {
+		close(channel)
+		return LogSubscription{Events: channel}
+	}
+
 	if h.subscribers == nil {
 		h.subscribers = make(map[uint64]chan domain.ActionLog)
 	}
 	h.nextID++
 	id := h.nextID
-	channel := make(chan domain.ActionLog, logSubscriberBuffer)
 	h.subscribers[id] = channel
 
 	var once sync.Once
@@ -59,6 +65,10 @@ func (h *LogHub) Publish(log domain.ActionLog) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	if h.closed {
+		return
+	}
+
 	for id, channel := range h.subscribers {
 		select {
 		case channel <- log:
@@ -66,6 +76,22 @@ func (h *LogHub) Publish(log domain.ActionLog) {
 			delete(h.subscribers, id)
 			close(channel)
 		}
+	}
+}
+
+// Close ends every active subscription so long-lived stream handlers can exit
+// during server shutdown.
+func (h *LogHub) Close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.closed {
+		return
+	}
+	h.closed = true
+	for id, channel := range h.subscribers {
+		delete(h.subscribers, id)
+		close(channel)
 	}
 }
 

@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import type { ActionLog } from "~/types/backendApi";
 import { getApiBaseUrl, request } from "~/services/backendApiClient";
+import { mergeLogList } from "~/lib/logs";
 import { queryKeys } from "./queryKeys";
 
 interface LogStream {
@@ -24,11 +25,10 @@ function updateLogQueries(queryClient: QueryClient, log: ActionLog) {
     if (!currentLogs) continue;
     const rawLimit = queryKey[1];
     const limit = typeof rawLimit === "number" && rawLimit > 0 ? rawLimit : 100;
-    const nextLogs = [
-      log,
-      ...currentLogs.filter((currentLog) => currentLog.id !== log.id),
-    ];
-    queryClient.setQueryData<ActionLog[]>(queryKey, nextLogs.slice(0, limit));
+    const nextLogs = mergeLogList(currentLogs, log, limit);
+    if (nextLogs) {
+      queryClient.setQueryData<ActionLog[]>(queryKey, nextLogs);
+    }
   }
 }
 
@@ -36,6 +36,7 @@ function acquireLogStream(queryClient: QueryClient) {
   let stream = logStreams.get(queryClient);
   if (!stream) {
     const source = new EventSource(`${getApiBaseUrl()}/api/logs/stream`);
+    let pendingLogUpdate = Promise.resolve();
     const onConnected = () => {
       // Reconcile logs once after each connection or reconnect.
       void queryClient.invalidateQueries({ queryKey: ["logs"] });
@@ -43,7 +44,15 @@ function acquireLogStream(queryClient: QueryClient) {
     const onLog = (event: Event) => {
       try {
         const log = JSON.parse((event as MessageEvent<string>).data) as ActionLog;
-        updateLogQueries(queryClient, log);
+        // Cancel an older snapshot before applying the event so its response
+        // cannot overwrite the newer SSE log in the query cache.
+        pendingLogUpdate = pendingLogUpdate
+          .then(async () => {
+            await queryClient.cancelQueries({ queryKey: ["logs"] });
+            updateLogQueries(queryClient, log);
+            await queryClient.invalidateQueries({ queryKey: ["logs"] });
+          })
+          .catch(() => undefined);
       } catch {
         // The regular query refresh remains the fallback for malformed events.
       }
@@ -78,9 +87,10 @@ export function useLogs(limit = 100) {
 
   return useQuery({
     queryKey: queryKeys.logs(limit),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const data = await request<{ logs: ActionLog[] }>(
         `/api/logs?limit=${limit}`,
+        { signal },
       );
       return data.logs;
     },

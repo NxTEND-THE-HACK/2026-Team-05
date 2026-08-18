@@ -53,6 +53,7 @@ func run(logger *slog.Logger) error {
 	}
 	registry := executor.NewRegistry(tuyaExecutor)
 	logHub := events.NewLogHub()
+	defer logHub.Close()
 	appService := service.New(repository, registry, cfg.Cooldown, logHub)
 	e := api.New(repository, appService, logger, cfg.AllowedOrigins, logHub)
 
@@ -70,6 +71,7 @@ func run(logger *slog.Logger) error {
 	case err := <-errCh:
 		return err
 	case <-signals:
+		logHub.Close()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
 		return e.Shutdown(shutdownCtx)
