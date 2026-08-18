@@ -16,6 +16,7 @@ import { useAppliances } from "~/hooks/useAppliances";
 import { useActions } from "~/hooks/useActions";
 import { useBindings, useDeleteBinding } from "~/hooks/useBindings";
 import { BackToDashboard } from "~/components/common/BackToDashboard";
+import { getMotionClip, MotionThumb } from "~/components/motion-preview";
 import { NewMotionModal } from "../components/dashboard/NewMotionModal";
 import type { MotionBinding, Appliance, Motion, Action } from "~/types/backendApi";
 
@@ -86,8 +87,15 @@ export function BindingsPage() {
     {
       title: "Bound Motion",
       key: "motion",
-      render: (_: unknown, row: BindingRow) =>
-        row.motion?.name ?? row.binding.motionId,
+      render: (_: unknown, row: BindingRow) => {
+        const clip = row.motion ? getMotionClip(row.motion.code) : undefined;
+        return (
+          <Space size="small" align="center">
+            {clip && <MotionThumb clip={clip} width={26} />}
+            {row.motion?.name ?? row.binding.motionId}
+          </Space>
+        );
+      },
     },
     {
       title: "Action",

@@ -1,6 +1,7 @@
-import { Table, Tag } from "antd";
+import { Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
+import { getMotionClip, MotionThumb } from "~/components/motion-preview";
 import type { ActionLog } from "~/types/backendApi";
 
 const statusConfig: Record<string, { color: string; label: string }> = {
@@ -24,8 +25,15 @@ const columns: ColumnsType<ActionLog> = [
     title: "Motion",
     dataIndex: "motionName",
     key: "motion",
-    render: (_: string | undefined, record: ActionLog) =>
-      record.motionName ?? record.motionCode,
+    render: (_: string | undefined, record: ActionLog) => {
+      const clip = getMotionClip(record.motionCode);
+      return (
+        <Space size="small" align="center">
+          {clip && <MotionThumb clip={clip} width={26} />}
+          {record.motionName ?? record.motionCode}
+        </Space>
+      );
+    },
   },
   {
     title: "Action",
