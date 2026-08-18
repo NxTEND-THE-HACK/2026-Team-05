@@ -19,7 +19,9 @@
 
 backend / front / recognition をまとめて起動します。停止は `Ctrl+C` で全サービスが終了します。ログはターミナルに色付きで表示されるほか、`logs/` にも保存されます。
 
-ポート 8080 / 5173 を他プロジェクトの Docker コンテナが使っている場合は、自動で `docker stop` してから起動します。
+バックエンドのポートは `backend/.env` の `PORT` に従います(既定: 8080)。変更した場合は `recognition/.env` の `GO_API_URL` と front 側の `VITE_API_BASE_URL` も同じポートに合わせてください。
+
+バックエンドのポート(既定 8080)とフロントのポート 5173 を他プロジェクトの Docker コンテナが使っている場合は、自動で `docker stop` してから起動します。
 
 オプション:
 
@@ -44,7 +46,7 @@ backend / front / recognition をまとめて起動します。停止は `Ctrl+C
 - `recognition/.venv` の作成とPython依存関係のインストール
 - MediaPipeモデルのダウンロード
 
-Go / Node.js / Python 3.11以降の本体は事前に必要です。macOSの場合は次の例でインストールできます。
+Go / Node.js / Python 3.11以降の本体に加え、`dev.sh` のポート監視用に `lsof` が事前に必要です(macOS と多くの Linux に標準搭載されています)。macOSの場合は次の例でインストールできます。
 
 ```bash
 brew install go node python@3.11

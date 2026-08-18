@@ -11,6 +11,8 @@
 # 停止は Ctrl+C。全サービスをまとめて終了します。
 # ログは logs/{backend,front,recognition}.log にも保存されます。
 # マイコン(ESP32カメラ)は実機側で動作するため、このスクリプトの対象外です。
+# 対応OS: macOS / Linux。Windows ではこの起動スクリプトは動作しません
+# (各サービス自体の制約ではなく、起動ランチャーだけの制約です)。
 
 set -euo pipefail
 set -m  # 各サービスを独立したプロセスグループにして、まとめて停止できるようにする
@@ -26,7 +28,7 @@ START_RECOGNITION=1
 OPEN_BROWSER=1
 
 usage() {
-  sed -n '3,15p' "$0"
+  sed -n '3,16p' "$0"
 }
 
 for arg in "$@"; do
@@ -94,6 +96,10 @@ need_cmd() {
   fi
 }
 
+# free_port / wait_port でポートの確保と起動確認に使う
+if [ "$START_BACKEND" -eq 1 ] || [ "$START_FRONT" -eq 1 ]; then
+  need_cmd lsof
+fi
 if [ "$START_BACKEND" -eq 1 ]; then
   need_cmd go
   if [ ! -f "$ROOT_DIR/backend/.env" ]; then
@@ -116,10 +122,20 @@ if [ "$START_RECOGNITION" -eq 1 ]; then
   if [ ! -f "$ROOT_DIR/recognition/.env" ]; then
     err "recognition/.env がありません。先に ./setup.sh を実行してください"
     fail=1
-  fi
-  if [ ! -f "$ROOT_DIR/recognition/models/pose_landmarker_full.task" ]; then
-    err "recognition/models にモデルがありません。先に ./setup.sh を実行してください"
-    fail=1
+  else
+    # .env で指定された Pose / Hand 両方のモデルを確認する(相対パスは recognition/ 基準)
+    pose_model=$(cd "$ROOT_DIR/recognition" && set -a && . ./.env && set +a && printf '%s' "${POSE_MODEL_PATH:-models/pose_landmarker_full.task}")
+    hand_model=$(cd "$ROOT_DIR/recognition" && set -a && . ./.env && set +a && printf '%s' "${HAND_MODEL_PATH:-models/hand_landmarker.task}")
+    for model in "$pose_model" "$hand_model"; do
+      case "$model" in
+        /*) model_path="$model" ;;
+        *)  model_path="$ROOT_DIR/recognition/$model" ;;
+      esac
+      if [ ! -f "$model_path" ]; then
+        err "モデルファイルがありません: $model (先に ./setup.sh を実行してください)"
+        fail=1
+      fi
+    done
   fi
   # 既存の認識ワーカーが残っていると検出イベントが二重送信になるため警告する
   stale=$(pgrep -f "gesture_recognition.main" 2>/dev/null | tr '\n' ' ' || true)
@@ -209,9 +225,11 @@ start_service() {
 
 # backend -> front -> recognition の順に起動
 if [ "$START_BACKEND" -eq 1 ]; then
-  free_port 8080
+  # 起動確認も backend/.env の PORT に合わせる
+  BACKEND_PORT=$(cd "$ROOT_DIR/backend" && set -a && . ./.env && set +a && printf '%s' "${PORT:-8080}")
+  free_port "$BACKEND_PORT"
   start_service backend "$C_BACKEND" cmd_backend
-  wait_port 8080 backend
+  wait_port "$BACKEND_PORT" backend
 fi
 
 if [ "$START_FRONT" -eq 1 ]; then
@@ -231,7 +249,7 @@ fi
 echo
 info "すべて起動しました:"
 [ "$START_FRONT" -eq 1 ]  && info "  フロント:     http://localhost:5173"
-[ "$START_BACKEND" -eq 1 ] && info "  バックエンド: http://127.0.0.1:8080"
+[ "$START_BACKEND" -eq 1 ] && info "  バックエンド: http://127.0.0.1:${BACKEND_PORT}"
 if [ "$START_RECOGNITION" -eq 1 ]; then
   RECOG_INFO=$(cd "$ROOT_DIR/recognition" && set -a && . ./.env && set +a && echo "${CAMERA_ID} <- ${CAMERA_SOURCE}")
   info "  認識ワーカー: ${RECOG_INFO}"
