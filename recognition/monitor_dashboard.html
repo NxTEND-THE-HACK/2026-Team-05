@@ -29,15 +29,23 @@
     .camera-detail-label { color: #9fb0c9; font-size: 12px; }
     .camera-detail-value { margin-top: 5px; font-size: 16px; font-weight: 700; }
     .camera-error { margin-top: 14px; padding: 10px 12px; border-radius: 9px; background: #3b2028; color: #ffb7b7; font-size: 13px; }
+    .processing-panel { margin-top: 22px; padding: 18px; border: 1px solid #34415e; border-radius: 16px; background: #171e2e; }
+    .processing-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .processing-detail { padding: 12px; border-radius: 10px; background: #202a40; }
+    .processing-detail-label { color: #9fb0c9; font-size: 12px; }
+    .processing-detail-value { margin-top: 5px; font-size: 16px; font-weight: 700; }
+    .processing-warning { margin-top: 14px; padding: 10px 12px; border-radius: 9px; background: #493b20; color: #f7d98b; font-size: 13px; }
     .landmark-panel { margin-top: 26px; padding: 18px; border: 1px solid #34415e; border-radius: 16px; background: #171e2e; }
     .landmark-stage { position: relative; min-height: 260px; display: grid; place-items: center; overflow: hidden; border-radius: 12px; background: #0c111d; }
     .landmark-stage img { display: block; width: 100%; height: auto; max-height: 560px; object-fit: contain; }
     .landmark-empty { padding: 40px 20px; color: #9fb0c9; text-align: center; }
     .landmark-details { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; color: #afc2e5; font-size: 14px; }
     .latest { min-height: 230px; display: grid; place-items: center; text-align: center; border: 1px solid #34415e; border-radius: 18px; background: linear-gradient(135deg, #1e2c4b, #182033); box-shadow: 0 20px 50px #06091288; }
+    .latest.stale { border-color: #886f36; background: linear-gradient(135deg, #3a321f, #28251d); }
     .latest.empty { color: #9fb0c9; }
     .latest-name { font-size: 56px; font-weight: 800; letter-spacing: .02em; }
     .latest-code { margin-top: 12px; color: #afc2e5; font: 16px ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .latest-age { margin-top: 10px; color: #f7d98b; font-size: 14px; }
     .confidence { margin-top: 16px; color: #8de1ba; font-size: 20px; font-weight: 700; }
     section { margin-top: 26px; }
     h2 { margin: 0 0 12px; font-size: 20px; }
@@ -52,6 +60,7 @@
       body { padding: 16px; }
       header { align-items: flex-start; flex-direction: column; }
       .camera-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .processing-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .latest-name { font-size: 38px; }
       th, td { padding: 10px 8px; font-size: 13px; }
     }
@@ -91,6 +100,41 @@
         </div>
       </div>
       <div id="camera-error" class="camera-error" hidden></div>
+    </section>
+
+    <section class="processing-panel">
+      <h2>処理状況</h2>
+      <div class="processing-details">
+        <div class="processing-detail">
+          <div class="processing-detail-label">処理出力FPS</div>
+          <div id="processing-output-fps" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">MediaPipe試行FPS</div>
+          <div id="processing-fps" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">出力フレーム</div>
+          <div id="processing-frames" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">欠落フレーム</div>
+          <div id="processing-dropped" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">処理率</div>
+          <div id="processing-ratio" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">平均処理時間</div>
+          <div id="processing-time" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">最終判定</div>
+          <div id="processing-detection-age" class="processing-detail-value">-</div>
+        </div>
+      </div>
+      <div id="processing-warning" class="processing-warning" hidden></div>
     </section>
 
     <section class="landmark-panel">
@@ -134,6 +178,14 @@
     const cameraReconnects = document.getElementById("camera-reconnects");
     const cameraRetry = document.getElementById("camera-retry");
     const cameraError = document.getElementById("camera-error");
+    const processingOutputFps = document.getElementById("processing-output-fps");
+    const processingFps = document.getElementById("processing-fps");
+    const processingFrames = document.getElementById("processing-frames");
+    const processingDropped = document.getElementById("processing-dropped");
+    const processingRatio = document.getElementById("processing-ratio");
+    const processingTime = document.getElementById("processing-time");
+    const processingDetectionAge = document.getElementById("processing-detection-age");
+    const processingWarning = document.getElementById("processing-warning");
     const landmarkOverlay = document.getElementById("landmark-overlay");
     const landmarkEmpty = document.getElementById("landmark-empty");
     const landmarkPose = document.getElementById("landmark-pose");
@@ -144,6 +196,20 @@
 
     function time(value) {
       return new Date(value).toLocaleTimeString("ja-JP", {hour12: false});
+    }
+
+    function ageSeconds(value) {
+      if (!value) return null;
+      const timestamp = Date.parse(value);
+      if (Number.isNaN(timestamp)) return null;
+      return Math.max(0, (Date.now() - timestamp) / 1000);
+    }
+
+    function ageText(seconds) {
+      if (seconds == null) return "-";
+      if (seconds < 1) return "たった今";
+      if (seconds < 60) return `${seconds.toFixed(1)}秒前`;
+      return `${Math.floor(seconds / 60)}分${Math.floor(seconds % 60)}秒前`;
     }
 
     const cameraStateLabels = {
@@ -200,12 +266,52 @@
         : "最終フレーム: -";
     }
 
+    function renderProcessing(processing, latest) {
+      if (!processing) {
+        processingOutputFps.textContent = "-";
+        processingFps.textContent = "-";
+        processingFrames.textContent = "-";
+        processingDropped.textContent = "-";
+        processingRatio.textContent = "-";
+        processingTime.textContent = "-";
+        processingDetectionAge.textContent = "-";
+        processingWarning.hidden = true;
+        return;
+      }
+      processingOutputFps.textContent = `${Number(processing.output_fps || 0).toFixed(1)} fps`;
+      processingFps.textContent = `${Number(processing.inference_fps || 0).toFixed(1)} fps`;
+      processingFrames.textContent = `${processing.frames_output || 0} 枚`;
+      processingDropped.textContent = `${processing.frames_dropped || 0} 枚`;
+      processingRatio.textContent = `${Number(processing.processing_ratio || 0).toFixed(1)}%`;
+      processingTime.textContent = processing.average_inference_ms == null
+        ? "-"
+        : `${Number(processing.average_inference_ms).toFixed(1)} ms`;
+      const detectionAge = ageSeconds(latest && latest.captured_at);
+      processingDetectionAge.textContent = latest
+        ? ageText(detectionAge)
+        : "未判定";
+
+      const dropped = Number(processing.frames_dropped || 0);
+      const errors = Number(processing.inference_errors || 0);
+      if (dropped > 0 || errors > 0) {
+        const messages = [];
+        if (dropped > 0) messages.push(`欠落 ${dropped}フレーム`);
+        if (errors > 0) messages.push(`推論エラー ${errors}回`);
+        processingWarning.hidden = false;
+        processingWarning.textContent = `${messages.join(" / ")}。受信FPSとMediaPipe処理FPSを比較してください。`;
+      } else {
+        processingWarning.hidden = true;
+        processingWarning.textContent = "";
+      }
+    }
+
     function render(state) {
       statusElement.textContent = state.status === "running"
         ? `判定中　最終更新 ${time(state.updated_at)}`
         : `モニター停止中　最終更新 ${time(state.updated_at)}`;
       renderCamera(state.camera);
       renderLandmarks(state.landmarks);
+      renderProcessing(state.processing, state.latest);
 
       const overlayUrl = `/data/monitor_landmarks.jpg?t=${Date.now()}`;
       landmarkOverlay.onload = () => {
@@ -220,15 +326,21 @@
 
       if (state.latest) {
         const latest = state.latest;
-        latestElement.className = "latest";
+        const detectionAge = ageSeconds(latest.captured_at);
+        const isStale = detectionAge != null && detectionAge >= 3;
+        latestElement.className = isStale ? "latest stale" : "latest";
         latestElement.innerHTML = `
           <div>
             <div class="latest-name"></div>
             <div class="latest-code"></div>
+            <div class="latest-age"></div>
             <div class="confidence"></div>
           </div>`;
         latestElement.querySelector(".latest-name").textContent = latest.name;
         latestElement.querySelector(".latest-code").textContent = `${time(latest.captured_at)}　${latest.motion_code}`;
+        latestElement.querySelector(".latest-age").textContent = isStale
+          ? `過去の判定　${ageText(detectionAge)}`
+          : `判定から ${ageText(detectionAge)}`;
         latestElement.querySelector(".confidence").textContent = `信頼度 ${(latest.confidence * 100).toFixed(0)}%`;
       }
 

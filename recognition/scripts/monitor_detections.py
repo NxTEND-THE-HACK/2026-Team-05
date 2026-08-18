@@ -16,6 +16,7 @@ from threading import Event
 from gesture_recognition.domain.models import LandmarkFrame
 from gesture_recognition.gestures.registry import default_engine
 from gesture_recognition.inference.mediapipe_detector import MediaPipeDetector
+from gesture_recognition.observability.metrics import FrameProcessingMetrics
 from gesture_recognition.stream.base import SourceStatus
 from gesture_recognition.stream.factory import create_frame_source
 
@@ -242,6 +243,7 @@ def _write_state(
     history: list[dict[str, object]],
     camera_status: SourceStatus | None = None,
     landmark_status: dict[str, object] | None = None,
+    processing_status: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -252,6 +254,7 @@ def _write_state(
             None if camera_status is None else camera_status.to_payload()
         ),
         "landmarks": landmark_status,
+        "processing": processing_status,
         "latest": history[-1] if history else None,
         "history": list(reversed(history[-50:])),
     }
@@ -340,6 +343,7 @@ def main() -> None:
     sequence = 0
     history: list[dict[str, object]] = []
     landmark_status: dict[str, object] | None = None
+    processing_metrics = FrameProcessingMetrics()
 
     if args.disabled_motions:
         print(
@@ -355,6 +359,7 @@ def main() -> None:
         history=history,
         camera_status=initial_camera_status,
         landmark_status=landmark_status,
+        processing_status=processing_metrics.to_payload(),
     )
     last_status_signature = _print_camera_status(initial_camera_status)
     next_state_write = time.monotonic()
@@ -369,6 +374,7 @@ def main() -> None:
                     history=history,
                     camera_status=camera_status,
                     landmark_status=landmark_status,
+                    processing_status=processing_metrics.to_payload(),
                 )
                 status_signature = _print_camera_status(
                     camera_status,
@@ -381,12 +387,23 @@ def main() -> None:
             if frame is None:
                 stop_event.wait(args.poll_interval)
                 continue
+            processing_metrics.observe_frame(frame.sequence)
             sequence = frame.sequence
 
+            inference_started = time.monotonic()
             try:
                 landmarks = detector.detect(frame)
             except ValueError:
+                processing_metrics.record_inference(
+                    time.monotonic() - inference_started,
+                    captured_at=frame.captured_at,
+                    success=False,
+                )
                 continue
+            processing_metrics.record_inference(
+                time.monotonic() - inference_started,
+                captured_at=landmarks.captured_at,
+            )
 
             landmark_status = {
                 "captured_at": landmarks.captured_at.isoformat(),
@@ -423,6 +440,7 @@ def main() -> None:
                     history=history,
                     camera_status=source.get_status(),
                     landmark_status=landmark_status,
+                    processing_status=processing_metrics.to_payload(),
                 )
                 print(
                     f"{_format_timestamp(landmarks.captured_at)} | "
@@ -438,6 +456,7 @@ def main() -> None:
             history=history,
             camera_status=source.get_status(),
             landmark_status=landmark_status,
+            processing_status=processing_metrics.to_payload(),
         )
 
 

@@ -204,7 +204,11 @@ python scripts/monitor_detections.py --webcam-index 0 --camera-profile micon
 ```
 
 The monitor prints source, connection state, output size, target FPS, and
-measured receive FPS. Its state JSON contains the same camera information.
+measured receive FPS. Its state JSON also reports MediaPipe processing FPS,
+successful landmark output FPS, processed/output frames, overwritten (dropped)
+frames, processing ratio, inference time, and the timestamp of the latest
+inference. The dashboard uses these values to distinguish camera input speed
+from actual inference/output throughput.
 
 The monitor dashboard also shows camera connection status. This status is
 kept inside the Python process and is not sent to the Go API. The status is
@@ -218,6 +222,10 @@ based on actual MJPEG frame reception:
 
 `CAMERA_STALE_AFTER_SECONDS` defaults to 3 seconds. The monitor equivalent can
 be overridden with `--stale-after-seconds 3`.
+
+The dashboard labels a detection older than three seconds as a past detection
+and shows its elapsed time. The latest detection is historical state; it is
+not a claim that the same motion is present in the current frame.
 
 ## Run locally
 
