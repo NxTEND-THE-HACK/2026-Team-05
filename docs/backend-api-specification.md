@@ -130,6 +130,7 @@ http://localhost:5173
 | `POST` | `/api/bindings` | モーション紐付け作成・更新 | フロント |
 | `DELETE` | `/api/bindings/:id` | モーション紐付け削除 | フロント |
 | `GET` | `/api/logs` | 操作ログ一覧 | フロント |
+| `GET` | `/api/logs/stream` | 操作ログのSSE通知 | フロント |
 
 ## 5. フロントエンド向けAPI
 
@@ -514,6 +515,25 @@ GET /api/logs?limit=100
 
 紐付け解決前に失敗したログでは `actionId` と `actionName` が存在しない。
 
+### 5.12 操作ログのリアルタイム通知
+
+```http
+GET /api/logs/stream
+Accept: text/event-stream
+```
+
+Server-Sent Events（SSE）で、新しく保存された操作ログを通知する。接続直後に
+`connected`、ログ保存時に `log` イベントを送信する。
+
+```text
+event: log
+data: {"id":"log-...","status":"SUCCESS", ...}
+```
+
+接続はプロセス内の購読であり、通知失敗が認識処理やログ保存を待たせることはない。
+切断時はクライアントが再接続し、`GET /api/logs` で状態を再同期する。バックエンドを
+複数プロセスで運用する場合は、プロセス間ブローカーまたは PostgreSQL の通知機構が必要。
+
 ## 6. Python認識サービス向けAPI
 
 フロントエンドから通常使用する必要はない。
@@ -635,7 +655,7 @@ GET /healthz
 - 家電の編集・削除
 - アクションの編集・削除
 - ログのページネーション、期間・ステータス絞り込み
-- WebSocketなどによるリアルタイム通知
+- 複数バックエンドプロセス間のリアルタイム通知連携
 - API認証・認可
 
 フロント側では、これらの操作ボタンを現時点で表示しないか、未実装として扱う。

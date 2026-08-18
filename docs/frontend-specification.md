@@ -339,7 +339,7 @@ front/app/
 | `GET /api/appliances/:id` | 一覧フィルタで代替 | BE 任意 |
 | ログ confidence / 詳細エラー | フィールドがあれば表示拡張可。現状は API 応答範囲 | BE |
 | カメラ死活の高精度表示 | 専用 API なし。既存フィールド頼み | BE / micon |
-| リアルタイム更新 | WebSocket/SSE なし。Query 再取得・health ポーリング | 将来 |
+| リアルタイム更新 | `/api/logs/stream` のSSEをログ表示中だけ購読。切断時は30秒間隔のQuery再取得で補完 | BE |
 | モーションマスタ新規作成 | UI は binding 作成が中心 | 仕様 |
 | camera 単位のアクション選択 | BE は motion→action 中心。cameraId は optional メタ | `backend-api-specification.md` §1 |
 | 仮デモ UI | 専用ルート・welcome・旧 mock は削除済み（`5a89fb4`） | — |

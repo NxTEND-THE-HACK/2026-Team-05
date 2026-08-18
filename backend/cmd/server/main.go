@@ -12,6 +12,7 @@ import (
 
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/api"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/config"
+	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/events"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/executor"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/service"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/store"
@@ -51,8 +52,9 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	registry := executor.NewRegistry(tuyaExecutor)
-	appService := service.New(repository, registry, cfg.Cooldown)
-	e := api.New(repository, appService, logger, cfg.AllowedOrigins)
+	logHub := events.NewLogHub()
+	appService := service.New(repository, registry, cfg.Cooldown, logHub)
+	e := api.New(repository, appService, logger, cfg.AllowedOrigins, logHub)
 
 	errCh := make(chan error, 1)
 	go func() {
