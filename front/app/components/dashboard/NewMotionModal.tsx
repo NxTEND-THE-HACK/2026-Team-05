@@ -90,7 +90,7 @@ export function NewMotionModal({
                 title={`${selectedMotion.name} プレビュー`}
                 trigger="click"
                 destroyTooltipOnHide
-                content={<MotionPreview clip={selectedClip} height={280} interactive={false} />}
+                content={<MotionPreview clip={selectedClip} width={360} height={280} interactive={false} />}
               >
                 <Button size="small" icon={<PlayCircleOutlined />}>
                   プレビュー

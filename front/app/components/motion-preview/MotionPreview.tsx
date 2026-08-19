@@ -6,22 +6,28 @@ const MotionPlayer = lazy(() => import("./MotionPlayer"));
 interface MotionPreviewProps {
   clip: MotionClip;
   height?: number | string;
+  width?: number | string;
   interactive?: boolean;
 }
 
-export function MotionPreview({ clip, height = 320, interactive = true }: MotionPreviewProps) {
+export function MotionPreview({
+  clip,
+  height = 320,
+  width = "100%",
+  interactive = true,
+}: MotionPreviewProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
   }, []);
 
   if (!mounted) {
-    return <div style={{ width: "100%", height }} />;
+    return <div style={{ width, height }} />;
   }
 
   return (
-    <Suspense fallback={<div style={{ width: "100%", height }} />}>
-      <MotionPlayer clip={clip} height={height} interactive={interactive} />
+    <Suspense fallback={<div style={{ width, height }} />}>
+      <MotionPlayer clip={clip} height={height} width={width} interactive={interactive} />
     </Suspense>
   );
 }

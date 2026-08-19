@@ -82,17 +82,20 @@ function Flash({
 interface MotionPlayerProps {
   clip: MotionClip;
   height?: number | string;
+  width?: number | string;
   interactive?: boolean;
 }
 
 export default function MotionPlayer({
   clip,
   height = 320,
+  width = "100%",
   interactive = true,
 }: MotionPlayerProps) {
   return (
-    <div style={{ width: "100%", height }}>
+    <div style={{ width, height }}>
       <Canvas
+        resize={{ offsetSize: true }}
         dpr={[1, 2]}
         camera={{ position: [0, 0.55, 2.6], fov: 35 }}
         gl={{ alpha: true, antialias: true }}
