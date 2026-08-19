@@ -87,10 +87,14 @@ export function NewMotionModal({
             <MotionThumb clip={selectedClip} width={40} />
             {selectedClip && (
               <Popover
-                title={`${selectedMotion.name} プレビュー`}
                 trigger="click"
                 destroyTooltipOnHide
-                content={<MotionPreview clip={selectedClip} width={360} height={280} interactive={false} />}
+                content={
+                  <Space direction="vertical" size="small" style={{ width: "100%" }}>
+                    <span style={{ fontWeight: 600 }}>{selectedMotion.name} プレビュー</span>
+                    <MotionPreview clip={selectedClip} width={360} height={280} interactive={false} />
+                  </Space>
+                }
               >
                 <Button size="small" icon={<PlayCircleOutlined />}>
                   プレビュー

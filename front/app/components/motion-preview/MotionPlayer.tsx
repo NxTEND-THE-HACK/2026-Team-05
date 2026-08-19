@@ -99,6 +99,7 @@ export default function MotionPlayer({
         dpr={[1, 2]}
         camera={{ position: [0, 0.55, 2.6], fov: 35 }}
         gl={{ alpha: true, antialias: true }}
+        onCreated={({ camera }) => camera.lookAt(0, 0.5, 0)}
       >
         <ambientLight intensity={0.8} />
         <directionalLight position={[2, 3, 4]} intensity={1.4} />
