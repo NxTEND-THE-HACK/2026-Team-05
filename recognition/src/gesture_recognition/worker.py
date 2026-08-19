@@ -25,7 +25,7 @@ class RecognitionWorker:
         detector: MediaPipeDetector,
         engine: GestureEngineLike,
         client: object,
-        frame_poll_interval_seconds: float = 0.01,
+        frame_poll_interval_seconds: float = 0.001,
     ) -> None:
         if not camera_id:
             raise ValueError("camera_id must not be empty")

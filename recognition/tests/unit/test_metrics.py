@@ -47,6 +47,20 @@ def test_metrics_count_inference_errors() -> None:
     assert payload["last_inference_at"] == captured_at.isoformat()
 
 
+def test_metrics_report_completed_loop_rate_and_duration() -> None:
+    now = [0.0]
+    metrics = FrameProcessingMetrics(clock=lambda: now[0])
+
+    metrics.record_loop(0.02)
+    now[0] = 0.1
+    metrics.record_loop(0.04)
+
+    payload = metrics.to_payload()
+
+    assert payload["loop_fps"] == 10.0
+    assert payload["average_loop_ms"] == 30.0
+
+
 def test_metrics_reject_invalid_values() -> None:
     with pytest.raises(ValueError):
         FrameProcessingMetrics(window_seconds=0)
@@ -59,3 +73,5 @@ def test_metrics_reject_invalid_values() -> None:
             -0.1,
             captured_at=datetime.now(timezone.utc),
         )
+    with pytest.raises(ValueError):
+        metrics.record_loop(-0.1)

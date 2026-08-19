@@ -16,6 +16,7 @@ from threading import Event
 from gesture_recognition.domain.models import LandmarkFrame
 from gesture_recognition.gestures.registry import default_engine
 from gesture_recognition.inference.mediapipe_detector import MediaPipeDetector
+from gesture_recognition.observability.latest_writer import LatestTaskWriter
 from gesture_recognition.observability.metrics import FrameProcessingMetrics
 from gesture_recognition.stream.base import SourceStatus
 from gesture_recognition.stream.factory import create_frame_source
@@ -79,7 +80,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--pose-model-path", default="models/pose_landmarker_full.task")
     parser.add_argument("--hand-model-path", default="models/hand_landmarker.task")
-    parser.add_argument("--poll-interval", type=float, default=0.01)
+    parser.add_argument("--poll-interval", type=float, default=0.001)
     parser.add_argument("--stale-after-seconds", type=float, default=3.0)
     parser.add_argument(
         "--state-path",
@@ -91,6 +92,12 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("data/monitor_landmarks.jpg"),
         help="Path for the latest MediaPipe landmark overlay JPEG",
+    )
+    parser.add_argument(
+        "--overlay-fps",
+        type=float,
+        default=5.0,
+        help="Maximum landmark overlay updates per second (default: 5)",
     )
     return parser.parse_args()
 
@@ -311,6 +318,8 @@ def main() -> None:
     args = _parse_args()
     if args.poll_interval <= 0 or args.stale_after_seconds <= 0:
         raise SystemExit("poll and stale thresholds must be positive")
+    if args.overlay_fps <= 0:
+        raise SystemExit("overlay FPS must be positive")
     if args.camera_source is not None and args.webcam_index is not None:
         raise SystemExit("--camera-source and --webcam-index cannot be combined")
     if args.webcam_index is not None and args.webcam_index < 0:
@@ -344,6 +353,14 @@ def main() -> None:
     history: list[dict[str, object]] = []
     landmark_status: dict[str, object] | None = None
     processing_metrics = FrameProcessingMetrics()
+    overlay_writer = LatestTaskWriter(
+        lambda task: _write_landmark_overlay(
+            args.overlay_path,
+            task[0],
+            task[1],
+        ),
+        max_fps=args.overlay_fps,
+    )
 
     if args.disabled_motions:
         print(
@@ -352,6 +369,7 @@ def main() -> None:
         )
 
     source.start()
+    overlay_writer.start()
     initial_camera_status = source.get_status()
     _write_state(
         args.state_path,
@@ -399,6 +417,9 @@ def main() -> None:
                     captured_at=frame.captured_at,
                     success=False,
                 )
+                processing_metrics.record_loop(
+                    time.monotonic() - inference_started
+                )
                 continue
             processing_metrics.record_inference(
                 time.monotonic() - inference_started,
@@ -413,14 +434,7 @@ def main() -> None:
                     len(hand.landmarks) for hand in landmarks.hands
                 ),
             }
-            try:
-                _write_landmark_overlay(
-                    args.overlay_path,
-                    frame.data,
-                    landmarks,
-                )
-            except Exception as exc:  # noqa: BLE001 - overlay must not stop recognition
-                logger.warning("landmark overlay update failed: %s", exc)
+            overlay_writer.submit((frame.data, landmarks))
 
             for detection in engine.update(landmarks):
                 name = MOTION_NAMES.get(detection.motion_code, detection.motion_code)
@@ -447,7 +461,11 @@ def main() -> None:
                     f"{detection.motion_code} | confidence={detection.confidence:.2f}",
                     flush=True,
                 )
+            processing_metrics.record_loop(
+                time.monotonic() - inference_started
+            )
     finally:
+        overlay_writer.stop()
         source.stop()
         detector.close()
         _write_state(

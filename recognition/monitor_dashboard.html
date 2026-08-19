@@ -110,6 +110,10 @@
           <div id="processing-output-fps" class="processing-detail-value">-</div>
         </div>
         <div class="processing-detail">
+          <div class="processing-detail-label">判定ループFPS</div>
+          <div id="processing-loop-fps" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
           <div class="processing-detail-label">MediaPipe試行FPS</div>
           <div id="processing-fps" class="processing-detail-value">-</div>
         </div>
@@ -126,7 +130,11 @@
           <div id="processing-ratio" class="processing-detail-value">-</div>
         </div>
         <div class="processing-detail">
-          <div class="processing-detail-label">平均処理時間</div>
+          <div class="processing-detail-label">判定ループ平均</div>
+          <div id="processing-loop-time" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">MediaPipe平均</div>
           <div id="processing-time" class="processing-detail-value">-</div>
         </div>
         <div class="processing-detail">
@@ -179,10 +187,12 @@
     const cameraRetry = document.getElementById("camera-retry");
     const cameraError = document.getElementById("camera-error");
     const processingOutputFps = document.getElementById("processing-output-fps");
+    const processingLoopFps = document.getElementById("processing-loop-fps");
     const processingFps = document.getElementById("processing-fps");
     const processingFrames = document.getElementById("processing-frames");
     const processingDropped = document.getElementById("processing-dropped");
     const processingRatio = document.getElementById("processing-ratio");
+    const processingLoopTime = document.getElementById("processing-loop-time");
     const processingTime = document.getElementById("processing-time");
     const processingDetectionAge = document.getElementById("processing-detection-age");
     const processingWarning = document.getElementById("processing-warning");
@@ -269,20 +279,26 @@
     function renderProcessing(processing, latest) {
       if (!processing) {
         processingOutputFps.textContent = "-";
+        processingLoopFps.textContent = "-";
         processingFps.textContent = "-";
         processingFrames.textContent = "-";
         processingDropped.textContent = "-";
         processingRatio.textContent = "-";
+        processingLoopTime.textContent = "-";
         processingTime.textContent = "-";
         processingDetectionAge.textContent = "-";
         processingWarning.hidden = true;
         return;
       }
       processingOutputFps.textContent = `${Number(processing.output_fps || 0).toFixed(1)} fps`;
+      processingLoopFps.textContent = `${Number(processing.loop_fps || 0).toFixed(1)} fps`;
       processingFps.textContent = `${Number(processing.inference_fps || 0).toFixed(1)} fps`;
       processingFrames.textContent = `${processing.frames_output || 0} 枚`;
       processingDropped.textContent = `${processing.frames_dropped || 0} 枚`;
       processingRatio.textContent = `${Number(processing.processing_ratio || 0).toFixed(1)}%`;
+      processingLoopTime.textContent = processing.average_loop_ms == null
+        ? "-"
+        : `${Number(processing.average_loop_ms).toFixed(1)} ms`;
       processingTime.textContent = processing.average_inference_ms == null
         ? "-"
         : `${Number(processing.average_inference_ms).toFixed(1)} ms`;
@@ -298,7 +314,7 @@
         if (dropped > 0) messages.push(`欠落 ${dropped}フレーム`);
         if (errors > 0) messages.push(`推論エラー ${errors}回`);
         processingWarning.hidden = false;
-        processingWarning.textContent = `${messages.join(" / ")}。受信FPSとMediaPipe処理FPSを比較してください。`;
+        processingWarning.textContent = `${messages.join(" / ")}。受信FPSと判定ループFPSを比較してください。`;
       } else {
         processingWarning.hidden = true;
         processingWarning.textContent = "";

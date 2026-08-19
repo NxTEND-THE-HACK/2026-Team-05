@@ -29,7 +29,9 @@ class FrameProcessingMetrics:
         self._last_sequence: int | None = None
         self._inference_times: deque[float] = deque()
         self._output_times: deque[float] = deque()
-        self._durations: deque[tuple[float, float]] = deque()
+        self._inference_durations: deque[tuple[float, float]] = deque()
+        self._loop_times: deque[float] = deque()
+        self._loop_durations: deque[tuple[float, float]] = deque()
         self.frames_processed = 0
         self.frames_output = 0
         self.frames_dropped = 0
@@ -69,7 +71,17 @@ class FrameProcessingMetrics:
         if success:
             self.frames_output += 1
             self._output_times.append(now)
-        self._durations.append((now, elapsed_seconds))
+        self._inference_durations.append((now, elapsed_seconds))
+        self._trim(now)
+
+    def record_loop(self, elapsed_seconds: float) -> None:
+        """Record the time spent processing one selected camera frame."""
+
+        if elapsed_seconds < 0:
+            raise ValueError("elapsed_seconds must not be negative")
+        now = self._clock()
+        self._loop_times.append(now)
+        self._loop_durations.append((now, elapsed_seconds))
         self._trim(now)
 
     def to_payload(self) -> dict[str, object]:
@@ -79,12 +91,20 @@ class FrameProcessingMetrics:
         self._trim(now)
         inference_fps = self._rate(self._inference_times)
         output_fps = self._rate(self._output_times)
+        loop_fps = self._rate(self._loop_times)
 
         average_inference_ms = 0.0
-        if self._durations:
+        if self._inference_durations:
             average_inference_ms = (
-                sum(duration for _, duration in self._durations)
-                / len(self._durations)
+                sum(duration for _, duration in self._inference_durations)
+                / len(self._inference_durations)
+                * 1000.0
+            )
+        average_loop_ms = 0.0
+        if self._loop_durations:
+            average_loop_ms = (
+                sum(duration for _, duration in self._loop_durations)
+                / len(self._loop_durations)
                 * 1000.0
             )
 
@@ -101,6 +121,7 @@ class FrameProcessingMetrics:
             "inference_errors": self.inference_errors,
             "inference_fps": round(inference_fps, 1),
             "output_fps": round(output_fps, 1),
+            "loop_fps": round(loop_fps, 1),
             "processing_ratio": round(processing_ratio, 1),
             "last_inference_ms": (
                 None
@@ -108,6 +129,7 @@ class FrameProcessingMetrics:
                 else round(self.last_inference_ms, 1)
             ),
             "average_inference_ms": round(average_inference_ms, 1),
+            "average_loop_ms": round(average_loop_ms, 1),
             "last_inference_at": (
                 None
                 if self.last_inference_at is None
@@ -121,8 +143,12 @@ class FrameProcessingMetrics:
             self._inference_times.popleft()
         while self._output_times and self._output_times[0] < cutoff:
             self._output_times.popleft()
-        while self._durations and self._durations[0][0] < cutoff:
-            self._durations.popleft()
+        while self._inference_durations and self._inference_durations[0][0] < cutoff:
+            self._inference_durations.popleft()
+        while self._loop_times and self._loop_times[0] < cutoff:
+            self._loop_times.popleft()
+        while self._loop_durations and self._loop_durations[0][0] < cutoff:
+            self._loop_durations.popleft()
 
     @staticmethod
     def _rate(times: deque[float]) -> float:

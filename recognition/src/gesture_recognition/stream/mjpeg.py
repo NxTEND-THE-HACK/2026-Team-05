@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import Event, Lock, Thread, current_thread
-from time import monotonic
+from time import monotonic, sleep
 from urllib.request import urlopen
 
 from .latest import LatestFrameStore
@@ -17,6 +17,9 @@ from ..domain.models import CapturedFrame
 logger = logging.getLogger(__name__)
 
 UrlOpener = Callable[..., object]
+
+DEFAULT_MJPEG_CHUNK_SIZE = 8 * 1024
+FRAME_HANDOFF_SECONDS = 0.001
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +72,10 @@ def _rounded(value: float | None) -> float | None:
     return None if value is None else round(value, 1)
 
 
-def iter_jpegs(stream: object, chunk_size: int = 64 * 1024) -> Iterator[bytes]:
+def iter_jpegs(
+    stream: object,
+    chunk_size: int = DEFAULT_MJPEG_CHUNK_SIZE,
+) -> Iterator[bytes]:
     """Extract JPEG images from an MJPEG byte stream.
 
     The camera may include multipart boundaries or omit them. JPEG start/end
@@ -239,6 +245,9 @@ class MjpegFrameSource:
                             return
                         frame = self._store.put(jpeg)
                         self._record_frame(frame)
+                        # Avoid processing several JPEGs in one reader burst
+                        # before the inference thread gets a chance to read.
+                        sleep(FRAME_HANDOFF_SECONDS)
                 raise ConnectionError("MJPEG stream ended")
             except Exception as exc:  # noqa: BLE001 - reconnect boundary
                 if self._stop_event.is_set():

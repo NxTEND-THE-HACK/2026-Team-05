@@ -20,6 +20,22 @@ def test_iter_jpegs_handles_boundaries_split_across_chunks() -> None:
     ]
 
 
+def test_iter_jpegs_uses_small_default_read_chunks() -> None:
+    class RecordingStream(BytesIO):
+        def __init__(self, payload: bytes) -> None:
+            super().__init__(payload)
+            self.sizes: list[int] = []
+
+        def read(self, size: int = -1) -> bytes:
+            self.sizes.append(size)
+            return super().read(size)
+
+    stream = RecordingStream(b"\xff\xd8frame\xff\xd9")
+
+    assert list(iter_jpegs(stream)) == [b"\xff\xd8frame\xff\xd9"]
+    assert stream.sizes[0] == 8 * 1024
+
+
 def _wait_until(predicate, timeout: float = 1.0) -> bool:
     deadline = monotonic() + timeout
     while monotonic() < deadline:

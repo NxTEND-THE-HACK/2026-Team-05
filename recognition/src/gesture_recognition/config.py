@@ -27,7 +27,7 @@ class Settings:
     reconnect_max_seconds: float = 30.0
     detection_send_retries: int = 3
     detection_send_timeout_seconds: float = 3.0
-    frame_poll_interval_seconds: float = 0.01
+    frame_poll_interval_seconds: float = 0.001
     camera_stale_after_seconds: float = 3.0
     pose_model_path: str = "models/pose_landmarker_full.task"
     hand_model_path: str = "models/hand_landmarker.task"
@@ -88,7 +88,7 @@ class Settings:
             values, "DETECTION_SEND_TIMEOUT_SECONDS", 3.0
         )
         poll_interval = _positive_float(
-            values, "FRAME_POLL_INTERVAL_SECONDS", 0.01
+            values, "FRAME_POLL_INTERVAL_SECONDS", 0.001
         )
         camera_stale_after = _positive_float(
             values, "CAMERA_STALE_AFTER_SECONDS", 3.0

@@ -79,6 +79,7 @@ DEFAULT_MISSING_POINT_PENALTY = 0.20
 DEFAULT_DTW_THRESHOLD = 0.35
 DEFAULT_NEAR_EXACT_MATCH_DISTANCE = 0.01
 DEFAULT_NEAR_EXACT_RATIO = 0.1
+DEFAULT_TEMPLATE_BATCH_SIZE = 64
 
 
 @dataclass(frozen=True, slots=True)
@@ -1058,9 +1059,9 @@ def _numpy_arrays(
         if feature_indices is None
         else tuple(feature_indices)
     )
-    values = _np.zeros((len(sequence), len(indices), 3), dtype=_np.float64)
+    values = _np.zeros((len(sequence), len(indices), 3), dtype=_np.float32)
     valid = _np.zeros((len(sequence), len(indices)), dtype=_np.bool_)
-    weights = _np.zeros((len(sequence), len(indices)), dtype=_np.float64)
+    weights = _np.zeros((len(sequence), len(indices)), dtype=_np.float32)
     for frame_index, item in enumerate(sequence):
         points = _points(item)
         item_weights = _weights(item)
@@ -1077,7 +1078,7 @@ def _numpy_arrays(
 def _build_numpy_template_batches(
     templates: Sequence[MotionTemplate],
     *,
-    batch_size: int = 8,
+    batch_size: int = DEFAULT_TEMPLATE_BATCH_SIZE,
     feature_indices: Sequence[int] | None = None,
 ) -> tuple[tuple[tuple[int, ...], tuple[int, ...], Any, Any, Any], ...]:
     assert _np is not None
@@ -1101,7 +1102,7 @@ def _build_numpy_template_batches(
             feature_count = template_arrays[0][0].shape[1]
             values = _np.zeros(
                 (len(template_arrays), max_frames, feature_count, 3),
-                dtype=_np.float64,
+                dtype=_np.float32,
             )
             valid = _np.zeros(
                 (len(template_arrays), max_frames, feature_count),
@@ -1109,7 +1110,7 @@ def _build_numpy_template_batches(
             )
             weights = _np.zeros(
                 (len(template_arrays), max_frames, feature_count),
-                dtype=_np.float64,
+                dtype=_np.float32,
             )
             lengths = []
             for index, (template_values, template_valid, template_weights) in enumerate(
@@ -1196,7 +1197,7 @@ def _dtw_from_local_distances_batch(local_distances: Any) -> list[float]:
     costs = _np.full(
         (batch_size, rows + 1, columns + 1),
         _np.inf,
-        dtype=_np.float64,
+        dtype=_np.float32,
     )
     path_lengths = _np.zeros(
         (batch_size, rows + 1, columns + 1),

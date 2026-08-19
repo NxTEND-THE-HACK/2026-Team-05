@@ -20,6 +20,7 @@ def test_settings_load_required_values() -> None:
     assert settings.webcam_fps == 15.0
     assert settings.webcam_jpeg_quality == 80
     assert settings.reconnect_initial_seconds == 1.0
+    assert settings.frame_poll_interval_seconds == 0.001
     assert settings.pose_model_path == "models/pose_landmarker_full.task"
     assert settings.hand_model_path == "models/hand_landmarker.task"
     assert settings.camera_stale_after_seconds == 3.0
