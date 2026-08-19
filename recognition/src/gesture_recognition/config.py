@@ -18,6 +18,7 @@ class Settings:
     camera_id: str
     camera_source: str | None
     go_api_url: str
+    sound_event_source: str | None = None
     webcam_index: int | None = None
     webcam_profile: str = "micon"
     webcam_fps: float = 15.0
@@ -29,6 +30,9 @@ class Settings:
     detection_send_timeout_seconds: float = 3.0
     frame_poll_interval_seconds: float = 0.001
     camera_stale_after_seconds: float = 3.0
+    sound_stale_after_seconds: float = 3.0
+    sound_match_before_seconds: float = 1.0
+    sound_match_after_seconds: float = 0.25
     pose_model_path: str = "models/pose_landmarker_full.task"
     hand_model_path: str = "models/hand_landmarker.task"
     motion_samples_path: str = "models/motion_samples.json"
@@ -56,6 +60,7 @@ class Settings:
         go_api_url = values.get(
             "GO_API_URL", "http://127.0.0.1:8080/internal/detections"
         )
+        sound_event_source = values.get("SOUND_EVENT_SOURCE", "").strip() or None
 
         webcam_profile = values.get("CAMERA_WEBCAM_PROFILE", "micon").strip().lower()
         webcam_fps = _positive_float(values, "CAMERA_WEBCAM_FPS", 15.0)
@@ -93,6 +98,15 @@ class Settings:
         camera_stale_after = _positive_float(
             values, "CAMERA_STALE_AFTER_SECONDS", 3.0
         )
+        sound_stale_after = _positive_float(
+            values, "SOUND_STALE_AFTER_SECONDS", 3.0
+        )
+        sound_match_before = _non_negative_float(
+            values, "SOUND_MATCH_BEFORE_SECONDS", 1.0
+        )
+        sound_match_after = _non_negative_float(
+            values, "SOUND_MATCH_AFTER_SECONDS", 0.25
+        )
         pose_model_path = _required_or_default(
             values, "POSE_MODEL_PATH", "models/pose_landmarker_full.task"
         )
@@ -124,6 +138,7 @@ class Settings:
             camera_id=camera_id,
             camera_source=camera_source,
             go_api_url=go_api_url,
+            sound_event_source=sound_event_source,
             webcam_index=webcam_index,
             webcam_profile=webcam_profile,
             webcam_fps=webcam_fps,
@@ -135,6 +150,9 @@ class Settings:
             detection_send_timeout_seconds=timeout,
             frame_poll_interval_seconds=poll_interval,
             camera_stale_after_seconds=camera_stale_after,
+            sound_stale_after_seconds=sound_stale_after,
+            sound_match_before_seconds=sound_match_before,
+            sound_match_after_seconds=sound_match_after,
             pose_model_path=pose_model_path,
             hand_model_path=hand_model_path,
             motion_samples_path=motion_samples_path,

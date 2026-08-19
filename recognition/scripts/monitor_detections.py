@@ -18,6 +18,12 @@ from gesture_recognition.gestures.registry import default_engine
 from gesture_recognition.inference.mediapipe_detector import MediaPipeDetector
 from gesture_recognition.observability.latest_writer import LatestTaskWriter
 from gesture_recognition.observability.metrics import FrameProcessingMetrics
+from gesture_recognition.sound.source import SoundEventStream, SoundSourceStatus
+from gesture_recognition.sound.validation import (
+    SoundValidationCoordinator,
+    SoundValidationDecision,
+    decisions_for_unconfigured_sound,
+)
 from gesture_recognition.stream.base import SourceStatus
 from gesture_recognition.stream.factory import create_frame_source
 
@@ -82,6 +88,25 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--hand-model-path", default="models/hand_landmarker.task")
     parser.add_argument("--poll-interval", type=float, default=0.001)
     parser.add_argument("--stale-after-seconds", type=float, default=3.0)
+    parser.add_argument(
+        "--sound-event-source",
+        help="Microcontroller NDJSON sound-event URL",
+    )
+    parser.add_argument(
+        "--sound-stale-after-seconds",
+        type=float,
+        default=3.0,
+    )
+    parser.add_argument(
+        "--sound-match-before-seconds",
+        type=float,
+        default=1.0,
+    )
+    parser.add_argument(
+        "--sound-match-after-seconds",
+        type=float,
+        default=0.25,
+    )
     parser.add_argument(
         "--state-path",
         type=Path,
@@ -251,6 +276,8 @@ def _write_state(
     camera_status: SourceStatus | None = None,
     landmark_status: dict[str, object] | None = None,
     processing_status: dict[str, object] | None = None,
+    sound_status: SoundSourceStatus | None = None,
+    sound_validation: dict[str, object] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -262,6 +289,12 @@ def _write_state(
         ),
         "landmarks": landmark_status,
         "processing": processing_status,
+        "sound": (
+            None
+            if sound_status is None
+            else sound_status.to_payload()
+        ),
+        "sound_validation": sound_validation,
         "latest": history[-1] if history else None,
         "history": list(reversed(history[-50:])),
     }
@@ -314,12 +347,123 @@ def _print_camera_status(
     return signature
 
 
+def _print_sound_status(
+    status: SoundSourceStatus | None,
+    previous_signature: tuple[object, ...] | None = None,
+) -> tuple[object, ...]:
+    if status is None:
+        signature: tuple[object, ...] = ("DISABLED",)
+        if signature != previous_signature:
+            print("[sound] state=DISABLED", flush=True)
+        return signature
+
+    payload = status.to_payload()
+    signature = (
+        payload.get("state"),
+        payload.get("events_received"),
+        payload.get("last_event_sequence"),
+        payload.get("reconnect_count"),
+        payload.get("last_error"),
+    )
+    if signature != previous_signature:
+        last_sequence = payload.get("last_event_sequence")
+        print(
+            "[sound] "
+            f"state={payload.get('state')} "
+            f"events={payload.get('events_received', 0)} "
+            f"last_sequence={last_sequence if last_sequence is not None else '-'} "
+            f"last_event_at={payload.get('last_event_at') or '-'} "
+            f"reconnects={payload.get('reconnect_count', 0)}",
+            flush=True,
+        )
+    return signature
+
+
+def _validation_payload(
+    decision: SoundValidationDecision,
+) -> dict[str, object]:
+    sound_event = decision.sound_event
+    return {
+        "result": decision.result,
+        "accepted": decision.accepted,
+        "motion_code": decision.detection.motion_code,
+        "detected_at": decision.detected_at.isoformat(),
+        "sound_sequence": (
+            None if sound_event is None else sound_event.sequence
+        ),
+        "sound_event_at": (
+            None
+            if sound_event is None
+            else sound_event.received_at.isoformat()
+        ),
+    }
+
+
+def _record_decisions(
+    decisions: tuple[SoundValidationDecision, ...],
+    *,
+    history: list[dict[str, object]],
+    landmark_status: dict[str, object] | None,
+) -> dict[str, object] | None:
+    """Print decisions and append only accepted detections to the monitor."""
+
+    latest_validation: dict[str, object] | None = None
+    for decision in decisions:
+        detection = decision.detection
+        if decision.result != "not_required":
+            latest_validation = _validation_payload(decision)
+            sequence_text = (
+                "-"
+                if decision.sound_event is None
+                else str(decision.sound_event.sequence)
+            )
+            print(
+                "[sound] "
+                f"motion={detection.motion_code} "
+                f"result={decision.result} "
+                f"sequence={sequence_text}",
+                flush=True,
+            )
+        if not decision.accepted:
+            continue
+
+        if landmark_status is not None:
+            landmark_status["motion_code"] = detection.motion_code
+            landmark_status["confidence"] = round(detection.confidence, 4)
+        item: dict[str, object] = {
+            "captured_at": decision.detected_at.isoformat(),
+            "name": MOTION_NAMES.get(
+                detection.motion_code,
+                detection.motion_code,
+            ),
+            "motion_code": detection.motion_code,
+            "confidence": round(detection.confidence, 4),
+        }
+        if decision.result != "not_required":
+            item["sound_validation"] = decision.result
+        history.append(item)
+        print(
+            f"{_format_timestamp(decision.detected_at)} | "
+            f"{detection.motion_code} | "
+            f"confidence={detection.confidence:.2f}",
+            flush=True,
+        )
+    return latest_validation
+
+
 def main() -> None:
     args = _parse_args()
     if args.poll_interval <= 0 or args.stale_after_seconds <= 0:
         raise SystemExit("poll and stale thresholds must be positive")
     if args.overlay_fps <= 0:
         raise SystemExit("overlay FPS must be positive")
+    if args.sound_stale_after_seconds <= 0:
+        raise SystemExit("sound stale threshold must be positive")
+    if (
+        args.sound_match_before_seconds < 0
+        or args.sound_match_after_seconds < 0
+    ):
+        raise SystemExit("sound match windows must not be negative")
     if args.camera_source is not None and args.webcam_index is not None:
         raise SystemExit("--camera-source and --webcam-index cannot be combined")
     if args.webcam_index is not None and args.webcam_index < 0:
@@ -349,9 +493,20 @@ def main() -> None:
         hand_model_path=args.hand_model_path,
     )
     engine = default_engine(disabled_motions=args.disabled_motions)
+    sound_validator = None
+    if args.sound_event_source:
+        sound_validator = SoundValidationCoordinator(
+            SoundEventStream(
+                args.sound_event_source,
+                stale_after_seconds=args.sound_stale_after_seconds,
+            ),
+            match_before_seconds=args.sound_match_before_seconds,
+            match_after_seconds=args.sound_match_after_seconds,
+        )
     sequence = 0
     history: list[dict[str, object]] = []
     landmark_status: dict[str, object] | None = None
+    latest_sound_validation: dict[str, object] | None = None
     processing_metrics = FrameProcessingMetrics()
     overlay_writer = LatestTaskWriter(
         lambda task: _write_landmark_overlay(
@@ -370,7 +525,12 @@ def main() -> None:
 
     source.start()
     overlay_writer.start()
+    if sound_validator is not None:
+        sound_validator.start()
     initial_camera_status = source.get_status()
+    initial_sound_status = (
+        None if sound_validator is None else sound_validator.get_status()
+    )
     _write_state(
         args.state_path,
         status="running",
@@ -378,14 +538,31 @@ def main() -> None:
         camera_status=initial_camera_status,
         landmark_status=landmark_status,
         processing_status=processing_metrics.to_payload(),
+        sound_status=initial_sound_status,
+        sound_validation=latest_sound_validation,
     )
     last_status_signature = _print_camera_status(initial_camera_status)
+    last_sound_signature = _print_sound_status(initial_sound_status)
     next_state_write = time.monotonic()
     try:
         while not stop_event.is_set():
+            if sound_validator is not None:
+                validation = _record_decisions(
+                    sound_validator.poll(),
+                    history=history,
+                    landmark_status=landmark_status,
+                )
+                if validation is not None:
+                    latest_sound_validation = validation
+
             now = time.monotonic()
             if now >= next_state_write:
                 camera_status = source.get_status()
+                sound_status = (
+                    None
+                    if sound_validator is None
+                    else sound_validator.get_status()
+                )
                 _write_state(
                     args.state_path,
                     status="running",
@@ -393,12 +570,18 @@ def main() -> None:
                     camera_status=camera_status,
                     landmark_status=landmark_status,
                     processing_status=processing_metrics.to_payload(),
+                    sound_status=sound_status,
+                    sound_validation=latest_sound_validation,
                 )
                 status_signature = _print_camera_status(
                     camera_status,
                     last_status_signature,
                 )
                 last_status_signature = status_signature
+                last_sound_signature = _print_sound_status(
+                    sound_status,
+                    last_sound_signature,
+                )
                 next_state_write = now + 0.5
 
             frame = source.read_latest(after_sequence=sequence)
@@ -436,18 +619,25 @@ def main() -> None:
             }
             overlay_writer.submit((frame.data, landmarks))
 
-            for detection in engine.update(landmarks):
-                name = MOTION_NAMES.get(detection.motion_code, detection.motion_code)
-                landmark_status["motion_code"] = detection.motion_code
-                landmark_status["confidence"] = round(detection.confidence, 4)
-                history.append(
-                    {
-                        "captured_at": landmarks.captured_at.isoformat(),
-                        "name": name,
-                        "motion_code": detection.motion_code,
-                        "confidence": round(detection.confidence, 4),
-                    }
+            detections = engine.update(landmarks)
+            if sound_validator is None:
+                decisions = decisions_for_unconfigured_sound(
+                    detections,
+                    detected_at=landmarks.captured_at,
                 )
+            else:
+                decisions = sound_validator.submit(
+                    detections,
+                    detected_at=landmarks.captured_at,
+                )
+            validation = _record_decisions(
+                decisions,
+                history=history,
+                landmark_status=landmark_status,
+            )
+            if validation is not None:
+                latest_sound_validation = validation
+            if decisions:
                 _write_state(
                     args.state_path,
                     status="running",
@@ -455,16 +645,19 @@ def main() -> None:
                     camera_status=source.get_status(),
                     landmark_status=landmark_status,
                     processing_status=processing_metrics.to_payload(),
-                )
-                print(
-                    f"{_format_timestamp(landmarks.captured_at)} | "
-                    f"{detection.motion_code} | confidence={detection.confidence:.2f}",
-                    flush=True,
+                    sound_status=(
+                        None
+                        if sound_validator is None
+                        else sound_validator.get_status()
+                    ),
+                    sound_validation=latest_sound_validation,
                 )
             processing_metrics.record_loop(
                 time.monotonic() - inference_started
             )
     finally:
+        if sound_validator is not None:
+            sound_validator.stop()
         overlay_writer.stop()
         source.stop()
         detector.close()
@@ -475,6 +668,12 @@ def main() -> None:
             camera_status=source.get_status(),
             landmark_status=landmark_status,
             processing_status=processing_metrics.to_payload(),
+            sound_status=(
+                None
+                if sound_validator is None
+                else sound_validator.get_status()
+            ),
+            sound_validation=latest_sound_validation,
         )
 
 

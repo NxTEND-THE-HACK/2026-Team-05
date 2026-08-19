@@ -28,3 +28,21 @@
 // 8 is a high-quality starting point for SVGA streaming; 5-7 is sharper but
 // heavier and may reduce the achievable FPS.
 #define CAMERA_JPEG_QUALITY 8
+
+// Cap the MJPEG stream so camera work leaves predictable CPU and Wi-Fi
+// headroom for the microphone task. This is an upper bound; capture may be
+// slower at larger frame sizes.
+#define CAMERA_MAX_FPS 15
+
+// Python connects to http://<camera-ip>:81/sound-events. Audio never leaves
+// the device; only an event sequence and device uptime are sent.
+#define AUDIO_HTTP_PORT 81
+
+// Adaptive short-sound detector.
+#define SOUND_CALIBRATION_MS 2000
+#define SOUND_AMBIENT_ALPHA 0.02f
+#define SOUND_TRIGGER_RATIO 3.0f
+#define SOUND_TRIGGER_DEVIATIONS 6.0f
+#define SOUND_RELEASE_RATIO 1.5f
+#define SOUND_RELEASE_FRAMES 3
+#define SOUND_COOLDOWN_MS 300

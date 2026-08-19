@@ -14,6 +14,8 @@ from .delivery.null import NullDeliveryClient
 from .gestures.registry import default_engine
 from .inference.mediapipe_detector import MediaPipeDetector
 from .observability.logging import configure_logging
+from .sound.source import SoundEventStream
+from .sound.validation import SoundValidationCoordinator
 from .stream.factory import create_frame_source
 from .worker import RecognitionWorker
 
@@ -46,6 +48,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         reconnect_max_seconds=settings.reconnect_max_seconds,
         stale_after_seconds=settings.camera_stale_after_seconds,
     )
+    sound_validator = None
+    if settings.sound_event_source is not None:
+        sound_validator = SoundValidationCoordinator(
+            SoundEventStream(
+                settings.sound_event_source,
+                reconnect_initial_seconds=settings.reconnect_initial_seconds,
+                reconnect_max_seconds=settings.reconnect_max_seconds,
+                stale_after_seconds=settings.sound_stale_after_seconds,
+            ),
+            match_before_seconds=settings.sound_match_before_seconds,
+            match_after_seconds=settings.sound_match_after_seconds,
+        )
     worker = RecognitionWorker(
         camera_id=settings.camera_id,
         source=source,
@@ -75,11 +89,13 @@ def main(argv: Sequence[str] | None = None) -> None:
             )
         ),
         frame_poll_interval_seconds=settings.frame_poll_interval_seconds,
+        sound_validator=sound_validator,
     )
     logging.getLogger(__name__).info(
-        "recognition worker started camera_id=%s delivery=%s",
+        "recognition worker started camera_id=%s delivery=%s sound_validation=%s",
         settings.camera_id,
         "disabled" if args.no_delivery else "go-api",
+        "enabled" if sound_validator is not None else "disabled",
     )
     worker.run(stop_event)
 
