@@ -1,8 +1,7 @@
-import { Layout, Typography, theme } from "antd";
+import { Layout, theme } from "antd";
 import { ApiStatusBadge } from "../dashboard/ApiStatusBadge";
 
 const { Header: AntHeader } = Layout;
-const { Text } = Typography;
 
 export function Header() {
   const { token } = theme.useToken();
@@ -18,9 +17,18 @@ export function Header() {
         borderBottom: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
-      <Text strong style={{ fontSize: 18, letterSpacing: 1 }}>
-        Remo-Trace
-      </Text>
+      <img
+        src="/remotrace-wordmark.svg"
+        alt="Remo-Trace"
+        style={{
+          display: "block",
+          height: 36,
+          width: "auto",
+          maxWidth: "55vw",
+          objectFit: "contain",
+          flexShrink: 1,
+        }}
+      />
       <ApiStatusBadge />
     </AntHeader>
   );
