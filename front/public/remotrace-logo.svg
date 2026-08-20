@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1900 440" role="img" aria-labelledby="title">
+  <title id="title">Remo-Trace</title>
+  <defs>
+    <linearGradient id="trail" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00e4df" />
+      <stop offset="0.55" stop-color="#08b9ec" />
+      <stop offset="1" stop-color="#006dff" />
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(-70 -65) scale(0.38)">
+    <path
+      fill="#fff"
+      d="M266 185h476c144 0 258 116 258 265 0 116-70 209-205 258l-98-94c114 4 185-64 185-164 0-85-67-154-148-154H266c-23 0-41-17-41-40v-31c0-23 18-40 41-40Z"
+    />
+
+    <path
+      fill="url(#trail)"
+      d="M315 573c93 17 188 16 264 33 102 22 151 77 195 157l91 167c51 89 119 125 226 143 8 2 4 8-2 8H907c-100 0-152-49-197-131l-88-161c-45-81-108-118-190-137l-107-25c-18-4-24-25-10-54Z"
+    />
+
+    <rect x="303" y="435" width="55" height="39" rx="7" fill="#0fe4de" />
+    <rect x="393" y="435" width="60" height="39" rx="6" fill="#0cd6e0" />
+    <rect x="489" y="435" width="55" height="39" rx="5" fill="#0ebbe7" />
+    <rect x="581" y="435" width="45" height="39" rx="5" fill="#0571fe" />
+
+    <path fill="#11ded9" d="m244 470 22-15c7-5 11-2 13 4l5 20c2 8 0 10-5 13l-19 8c-6 2-10 0-13-5l-7-13c-3-5-2-9 4-12Z" />
+    <path fill="#10d8da" d="m233 501 25 9c5 2 7 5 7 10l-1 16c0 5-2 8-7 10l-22 2c-6 1-9-2-10-8l1-29c0-7 2-10 7-10Z" />
+    <path fill="#0fd0df" d="m271 548 25 16c8 5 10 10 6 18l-12 17c-4 7-9 8-16 4l-20-14c-5-4-5-8-1-14l12-22c2-5 2-7 6-5Z" />
+  </g>
+
+  <text
+    x="430"
+    y="315"
+    fill="#fff"
+    font-family="Inter, Arial, sans-serif"
+    font-size="214"
+    font-weight="800"
+    letter-spacing="-10"
+  >Remo-Trace</text>
+</svg>
