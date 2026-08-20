@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/domain"
+	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/events"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/service"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/store"
 	"github.com/labstack/echo/v4"
@@ -23,10 +24,11 @@ type Handler struct {
 	store   store.Store
 	service *service.Service
 	logger  *slog.Logger
+	logHub  *events.LogHub
 }
 
-func New(repository store.Store, appService *service.Service, logger *slog.Logger, allowedOrigins []string) *echo.Echo {
-	h := &Handler{store: repository, service: appService, logger: logger}
+func New(repository store.Store, appService *service.Service, logger *slog.Logger, allowedOrigins []string, logHub *events.LogHub) *echo.Echo {
+	h := &Handler{store: repository, service: appService, logger: logger, logHub: logHub}
 	e := echo.New()
 	e.HideBanner = true
 	e.HTTPErrorHandler = h.errorHandler
@@ -55,6 +57,7 @@ func New(repository store.Store, appService *service.Service, logger *slog.Logge
 	api.POST("/bindings", h.createBinding)
 	api.DELETE("/bindings/:id", h.deleteBinding)
 	api.GET("/logs", h.logs)
+	api.GET("/logs/stream", h.logStream)
 	return e
 }
 
@@ -230,6 +233,63 @@ func (h *Handler) logs(c echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusOK, map[string]any{"logs": items})
+}
+
+func (h *Handler) logStream(c echo.Context) error {
+	response := c.Response()
+	flusher, ok := response.Writer.(http.Flusher)
+	if !ok {
+		return echo.NewHTTPError(http.StatusInternalServerError, "streaming is not supported")
+	}
+
+	subscription := h.logHub.Subscribe()
+	defer subscription.Close()
+
+	response.Header().Set(echo.HeaderContentType, "text/event-stream")
+	response.Header().Set(echo.HeaderCacheControl, "no-cache, no-transform")
+	response.Header().Set("Connection", "keep-alive")
+	response.Header().Set("X-Accel-Buffering", "no")
+	response.WriteHeader(http.StatusOK)
+	if err := writeSSE(response, "connected", map[string]string{}); err != nil {
+		return nil
+	}
+	flusher.Flush()
+
+	heartbeat := time.NewTicker(20 * time.Second)
+	defer heartbeat.Stop()
+	for {
+		select {
+		case <-c.Request().Context().Done():
+			return nil
+		case log, ok := <-subscription.Events:
+			if !ok {
+				return nil
+			}
+			if err := writeSSE(response, "log", log); err != nil {
+				return nil
+			}
+			flusher.Flush()
+		case <-heartbeat.C:
+			if _, err := response.Write([]byte(": keep-alive\n\n")); err != nil {
+				return nil
+			}
+			flusher.Flush()
+		}
+	}
+}
+
+func writeSSE(writer io.Writer, event string, payload any) error {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if event == "connected" {
+		if _, err := fmt.Fprintln(writer, "retry: 10000"); err != nil {
+			return err
+		}
+	}
+	_, err = fmt.Fprintf(writer, "event: %s\ndata: %s\n\n", event, data)
+	return err
 }
 
 func (h *Handler) errorHandler(err error, c echo.Context) {

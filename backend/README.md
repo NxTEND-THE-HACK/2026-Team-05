@@ -121,6 +121,7 @@ GO_API_URL=http://127.0.0.1:8080/internal/detections
 | `GET` / `POST` | `/api/bindings` | 紐付け一覧・作成または更新 |
 | `DELETE` | `/api/bindings/:id` | 紐付け削除 |
 | `GET` | `/api/logs?limit=100` | 操作ログ。最大500件 |
+| `GET` | `/api/logs/stream` | 操作ログのSSE通知 |
 
 リストAPIのレスポンスはフロントの既存型に合わせて `{ "cameras": [...] }` のような包み形式です。作成APIは作成したオブジェクトを直接返します。バックエンドでは `providerType: "TUYA"` を追加しているため、フロント側の `ActionProviderType` にもマージ時に `"TUYA"` を加えてください。
 

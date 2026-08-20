@@ -152,6 +152,16 @@ paths:
       responses:
         "200":
           description: Action log list
+  /api/logs/stream:
+    get:
+      summary: Stream newly persisted action logs
+      responses:
+        "200":
+          description: Server-sent event stream. Events use `log` with an ActionLog JSON payload.
+          content:
+            text/event-stream:
+              schema:
+                type: string
 components:
   responses:
     BadRequest:

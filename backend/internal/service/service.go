@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/domain"
+	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/events"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/executor"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/store"
 )
@@ -18,6 +19,7 @@ type Service struct {
 	executor *executor.Registry
 	cooldown time.Duration
 	now      func() time.Time
+	logHub   *events.LogHub
 }
 
 type DetectionResult struct {
@@ -55,8 +57,8 @@ type ApplianceState struct {
 	States      []ApplianceSwitchState `json:"states,omitempty"`
 }
 
-func New(repository store.Store, registry *executor.Registry, cooldown time.Duration) *Service {
-	return &Service{store: repository, executor: registry, cooldown: cooldown, now: func() time.Time { return time.Now().UTC() }}
+func New(repository store.Store, registry *executor.Registry, cooldown time.Duration, logHub *events.LogHub) *Service {
+	return &Service{store: repository, executor: registry, cooldown: cooldown, now: func() time.Time { return time.Now().UTC() }, logHub: logHub}
 }
 
 func (s *Service) ProcessDetection(ctx context.Context, event domain.DetectionEvent) (DetectionResult, error) {
@@ -68,6 +70,7 @@ func (s *Service) ProcessDetection(ctx context.Context, event domain.DetectionEv
 		return DetectionResult{Status: "duplicate"}, nil
 	}
 	if claim.Action == nil {
+		s.publishLog(claim.Log)
 		status := "rejected"
 		if claim.Log != nil && claim.Log.Status == domain.LogCoolingDown {
 			status = "cooling_down"
@@ -86,6 +89,7 @@ func (s *Service) ProcessDetection(ctx context.Context, event domain.DetectionEv
 	if err != nil {
 		return DetectionResult{}, fmt.Errorf("record action result: %w", err)
 	}
+	s.publishLog(&stored)
 	status := "executed"
 	if stored.Status == domain.LogFailed {
 		status = "failed"
@@ -113,10 +117,18 @@ func (s *Service) ExecuteAction(ctx context.Context, actionID string) (ExecuteRe
 	} else {
 		log.Status = domain.LogSuccess
 	}
-	if _, err := s.store.AppendLog(ctx, log); err != nil {
+	stored, err := s.store.AppendLog(ctx, log)
+	if err != nil {
 		return ExecuteResult{}, fmt.Errorf("record manual action: %w", err)
 	}
+	s.publishLog(&stored)
 	return result, nil
+}
+
+func (s *Service) publishLog(log *domain.ActionLog) {
+	if s.logHub != nil && log != nil {
+		s.logHub.Publish(*log)
+	}
 }
 
 func (s *Service) CreateAction(ctx context.Context, input domain.CreateActionInput) (domain.Action, error) {
