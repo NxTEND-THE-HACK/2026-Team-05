@@ -24,15 +24,29 @@ type Motion struct {
 }
 
 type Appliance struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Category  string    `json:"category"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID              string       `json:"id"`
+	Name            string       `json:"name"`
+	Category        string       `json:"category"`
+	ControlProvider ProviderType `json:"controlProvider"`
+	ControllerID    string       `json:"controllerId,omitempty"`
+	CreatedAt       time.Time    `json:"createdAt"`
 }
 
 type ProviderType string
 
-const ProviderTuya ProviderType = "TUYA"
+const (
+	ProviderTuya    ProviderType = "TUYA"
+	ProviderESP32IR ProviderType = "ESP32_IR"
+)
+
+// EffectiveControlProvider keeps appliances created before provider-aware
+// device registration compatible with the original Tuya-only behavior.
+func (a Appliance) EffectiveControlProvider() ProviderType {
+	if a.ControlProvider == "" {
+		return ProviderTuya
+	}
+	return a.ControlProvider
+}
 
 type Action struct {
 	ID           string          `json:"id"`
@@ -82,8 +96,10 @@ type DetectionEvent struct {
 }
 
 type CreateApplianceInput struct {
-	Name     string `json:"name"`
-	Category string `json:"category"`
+	Name            string       `json:"name"`
+	Category        string       `json:"category"`
+	ControlProvider ProviderType `json:"controlProvider"`
+	ControllerID    string       `json:"controllerId,omitempty"`
 }
 
 type CreateActionInput struct {

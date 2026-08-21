@@ -51,7 +51,8 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	registry := executor.NewRegistry(tuyaExecutor)
+	irExecutor := executor.NewIR(cfg.IR, logger)
+	registry := executor.NewRegistry(tuyaExecutor, irExecutor)
 	logHub := events.NewLogHub()
 	defer logHub.Close()
 	appService := service.New(repository, registry, cfg.Cooldown, logHub)
@@ -59,7 +60,13 @@ func run(logger *slog.Logger) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("HTTP server started", "port", cfg.Port, "tuya_dry_run", cfg.Tuya.DryRun)
+		logger.Info(
+			"HTTP server started",
+			"port", cfg.Port,
+			"tuya_dry_run", cfg.Tuya.DryRun,
+			"ir_controller_id", cfg.IR.ControllerID,
+			"ir_configured", irExecutor.Configured(),
+		)
 		if err := e.Start(":" + cfg.Port); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

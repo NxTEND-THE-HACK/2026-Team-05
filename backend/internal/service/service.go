@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/domain"
@@ -12,14 +13,25 @@ import (
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/store"
 )
 
-var ErrInvalidAction = errors.New("invalid action")
+var (
+	ErrInvalidAction         = errors.New("invalid action")
+	ErrInvalidAppliance      = errors.New("invalid appliance")
+	ErrIRLearningConflict    = errors.New("infrared learning is already in progress")
+	ErrIRLearningNotFound    = errors.New("infrared learning session was not found")
+	ErrIRLearningNotCaptured = errors.New("infrared signal has not been captured")
+	ErrIRLearningTimeout     = errors.New("infrared learning timed out")
+	ErrDuplicateAction       = errors.New("an action with the same name already exists")
+)
 
 type Service struct {
-	store    store.Store
-	executor *executor.Registry
-	cooldown time.Duration
-	now      func() time.Time
-	logHub   *events.LogHub
+	store             store.Store
+	executor          *executor.Registry
+	cooldown          time.Duration
+	now               func() time.Time
+	logHub            *events.LogHub
+	irMu              sync.Mutex
+	irSessions        map[string]*IRLearningSession
+	activeIRSessionID string
 }
 
 type DetectionResult struct {
@@ -58,7 +70,14 @@ type ApplianceState struct {
 }
 
 func New(repository store.Store, registry *executor.Registry, cooldown time.Duration, logHub *events.LogHub) *Service {
-	return &Service{store: repository, executor: registry, cooldown: cooldown, now: func() time.Time { return time.Now().UTC() }, logHub: logHub}
+	return &Service{
+		store:      repository,
+		executor:   registry,
+		cooldown:   cooldown,
+		now:        func() time.Time { return time.Now().UTC() },
+		logHub:     logHub,
+		irSessions: make(map[string]*IRLearningSession),
+	}
 }
 
 func (s *Service) ProcessDetection(ctx context.Context, event domain.DetectionEvent) (DetectionResult, error) {
@@ -109,11 +128,12 @@ func (s *Service) ExecuteAction(ctx context.Context, actionID string) (ExecuteRe
 	now := s.now()
 	log := domain.ActionLog{EventID: eventID, CameraID: "manual", MotionCode: "MANUAL_TRIGGER", ActionID: action.ID, ActionName: action.Name, DetectedAt: now}
 	result := ExecuteResult{Success: true}
-	if err := s.executor.Execute(ctx, action); err != nil {
+	executionErr := s.executor.Execute(ctx, action)
+	if executionErr != nil {
 		log.Status = domain.LogFailed
-		log.ErrorMessage = err.Error()
+		log.ErrorMessage = executionErr.Error()
 		result.Success = false
-		result.Message = err.Error()
+		result.Message = executionErr.Error()
 	} else {
 		log.Status = domain.LogSuccess
 	}
@@ -122,6 +142,9 @@ func (s *Service) ExecuteAction(ctx context.Context, actionID string) (ExecuteRe
 		return ExecuteResult{}, fmt.Errorf("record manual action: %w", err)
 	}
 	s.publishLog(&stored)
+	if errors.Is(executionErr, executor.ErrIRBusy) {
+		return result, executionErr
+	}
 	return result, nil
 }
 
@@ -132,6 +155,13 @@ func (s *Service) publishLog(log *domain.ActionLog) {
 }
 
 func (s *Service) CreateAction(ctx context.Context, input domain.CreateActionInput) (domain.Action, error) {
+	appliance, err := s.store.ApplianceByID(ctx, input.ApplianceID)
+	if err != nil {
+		return domain.Action{}, err
+	}
+	if appliance.EffectiveControlProvider() != input.ProviderType {
+		return domain.Action{}, fmt.Errorf("%w: action provider %s does not match appliance provider %s", ErrInvalidAction, input.ProviderType, appliance.EffectiveControlProvider())
+	}
 	action := domain.Action{ApplianceID: input.ApplianceID, Name: input.Name, ProviderType: input.ProviderType, Params: input.Params}
 	if err := s.executor.Validate(action); err != nil {
 		return domain.Action{}, fmt.Errorf("%w: %v", ErrInvalidAction, err)
@@ -146,6 +176,26 @@ func (s *Service) CreateAction(ctx context.Context, input domain.CreateActionInp
 func (s *Service) GetApplianceState(ctx context.Context, applianceID string) (ApplianceState, error) {
 	now := s.now().UTC().Format(time.RFC3339)
 	state := ApplianceState{ApplianceID: applianceID, FetchedAt: now}
+	appliance, err := s.store.ApplianceByID(ctx, applianceID)
+	if err != nil {
+		return state, err
+	}
+	if appliance.EffectiveControlProvider() == domain.ProviderESP32IR {
+		provider, err := s.irProviderForAppliance(appliance)
+		if err != nil {
+			state.Source = "esp32-ir"
+			state.Error = err.Error()
+			return state, err
+		}
+		health, err := provider.Health(ctx)
+		state.Source = "esp32-ir"
+		if err != nil {
+			state.Error = err.Error()
+			return state, err
+		}
+		state.Online = health.OK && health.WiFiConnected
+		return state, nil
+	}
 	actions, err := s.store.ListActions(ctx, applianceID)
 	if err != nil {
 		return state, fmt.Errorf("list actions: %w", err)
