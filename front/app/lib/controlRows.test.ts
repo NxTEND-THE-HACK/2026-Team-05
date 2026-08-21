@@ -4,7 +4,7 @@ import {
   groupActionsIntoRows,
   isRowToggleable,
 } from "./controlRows";
-import type { Action } from "~/types/backendApi";
+import type { TuyaAction } from "~/types/backendApi";
 
 function makeAction(
   id: string,
@@ -12,7 +12,7 @@ function makeAction(
   value: boolean | undefined,
   switchCode: string = "switch",
   name?: string,
-): Action {
+): TuyaAction {
   return {
     id,
     applianceId,

@@ -1,10 +1,10 @@
-import type { Action } from "~/types/backendApi";
+import type { TuyaAction } from "~/types/backendApi";
 
 export interface ControlRow {
   key: string;
   name: string;
-  onAction?: Action;
-  offAction?: Action;
+  onAction?: TuyaAction;
+  offAction?: TuyaAction;
 }
 
 /**
@@ -12,13 +12,13 @@ export interface ControlRow {
  * 同じ appliance 内で value=true / value=false の Action が揃っているときだけ
  * トグル UI として使える。それ以外は disable して単発実行に留める。
  */
-function rowKey(action: Action): string {
+function rowKey(action: TuyaAction): string {
   const code = action.params.switchCode?.trim() || "switch";
   return `${action.applianceId}::${code}`;
 }
 
 /** 行キーから人間に見やすい名前を引く。Action 名から "ON"/"OFF" サフィックスを剥がす。 */
-function deriveRowName(actions: Action[]): string {
+function deriveRowName(actions: TuyaAction[]): string {
   const seed = actions[0];
   return (
     seed.name.replace(/\s*(ON|OFF|オン|オフ)\s*$/i, "").trim() || seed.name
@@ -31,11 +31,11 @@ function deriveRowName(actions: Action[]): string {
  * 揃った行だけをトグル行として返す。片側しか無い Action も同じ行にまとめず、
  * 単発実行行として別キーで返す (UI 側で disable にして安全側に倒す)。
  */
-export function groupActionsIntoRows(actions: Action[]): ControlRow[] {
+export function groupActionsIntoRows(actions: TuyaAction[]): ControlRow[] {
   // まず (applianceId, switchCode) ごとに Action をまとめて、value の有無ごとに分類。
   const groups = new Map<
     string,
-    { onAction?: Action; offAction?: Action; any: Action }
+    { onAction?: TuyaAction; offAction?: TuyaAction; any: TuyaAction }
   >();
   for (const a of actions) {
     const key = rowKey(a);
@@ -56,7 +56,7 @@ export function groupActionsIntoRows(actions: Action[]): ControlRow[] {
   for (const [key, bucket] of groups) {
     rows.push({
       key,
-      name: deriveRowName([bucket.onAction, bucket.offAction, bucket.any].filter(Boolean) as Action[]),
+      name: deriveRowName([bucket.onAction, bucket.offAction, bucket.any].filter(Boolean) as TuyaAction[]),
       onAction: bucket.onAction,
       offAction: bucket.offAction,
     });
