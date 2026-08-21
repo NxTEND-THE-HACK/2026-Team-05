@@ -24,8 +24,8 @@ test("hand presets are well-formed", () => {
   assert.equal(HAND_FIST.index, 1);
   assert.equal(HAND_POINT.index, 0);
   assert.equal(HAND_POINT.middle, 1);
-  assert.ok(HAND_THUMB_UP.thumbTilt > 0);
-  assert.ok(HAND_THUMB_DOWN.thumbTilt < 0);
+  assert.ok(HAND_THUMB_UP.thumbTilt < 0, "thumbs-up points distal (up when arm raised)");
+  assert.ok(HAND_THUMB_DOWN.thumbTilt < 0, "thumbs-down points distal (down when arm lowered)");
 });
 
 test("sampling every clip keeps hand values finite and curls in range", () => {

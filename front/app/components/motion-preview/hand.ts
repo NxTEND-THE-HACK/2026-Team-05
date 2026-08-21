@@ -47,7 +47,7 @@ export const HAND_THUMB_UP: HandPose = handPose({
   middle: 1,
   ring: 1,
   pinky: 1,
-  thumbTilt: Math.PI / 2,
+  thumbTilt: -Math.PI / 2,
 });
 
 export const HAND_THUMB_DOWN: HandPose = handPose({
