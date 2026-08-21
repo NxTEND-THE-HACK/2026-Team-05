@@ -15,6 +15,7 @@ def test_settings_load_required_values() -> None:
     assert settings.camera_id == "camera-1"
     assert settings.camera_source == "http://camera/stream"
     assert settings.go_api_url == "http://go/internal/detections"
+    assert settings.detection_min_confidence == 0.5
     assert settings.webcam_index is None
     assert settings.webcam_profile == "micon"
     assert settings.webcam_fps == 15.0
@@ -49,6 +50,7 @@ def test_settings_load_temporal_recognition_overrides() -> None:
             "CONFIRMATION_COUNT": "3",
             "RECOGNITION_COOLDOWN_SECONDS": "1.5",
             "RECOGNITION_RESET_GAP_SECONDS": "0.9",
+            "DETECTION_MIN_CONFIDENCE": "0.65",
             "MOTION_SAMPLES_PATH": "custom/templates.json",
             "CAMERA_STALE_AFTER_SECONDS": "4.5",
         }
@@ -63,6 +65,7 @@ def test_settings_load_temporal_recognition_overrides() -> None:
     assert settings.confirmation_count == 3
     assert settings.recognition_cooldown_seconds == 1.5
     assert settings.recognition_reset_gap_seconds == 0.9
+    assert settings.detection_min_confidence == 0.65
     assert settings.motion_samples_path == "custom/templates.json"
     assert settings.camera_stale_after_seconds == 4.5
 
@@ -118,6 +121,8 @@ def test_settings_reject_invalid_temporal_values() -> None:
         ("KNN_K", "0"),
         ("CONFIRMATION_COUNT", "0"),
         ("CAMERA_STALE_AFTER_SECONDS", "0"),
+        ("DETECTION_MIN_CONFIDENCE", "-0.1"),
+        ("DETECTION_MIN_CONFIDENCE", "1.1"),
     ):
         values = {**base, key: value}
         try:

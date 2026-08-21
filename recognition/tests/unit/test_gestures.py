@@ -100,7 +100,7 @@ def test_swipe_requires_a_chest_like_start_region_when_shoulders_are_available()
     rule = SwipeRightRule(movement_threshold=0.12)
     assert rule.update(frame_at(0, 0.9, 0.6)) is None
     assert rule.update(frame_at(1, 0.55, 0.7)) is None
-    detection = rule.update(frame_at(2, 0.35, 0.7))
+    detection = rule.update(frame_at(2, 0.35, 0.55))
     assert detection is not None
     assert detection.motion_code == "MOTION_SWIPE_RIGHT"
 
@@ -270,6 +270,9 @@ def test_thumbs_up_move_up_and_thumbs_down_move_down() -> None:
     # anti-jitter cooldown.
     thumbs_up = ThumbsUpMoveUpRule(cooldown_seconds=0.0)
     assert thumbs_up.update(LandmarkFrame(at, {}, (_thumb_hand("up", 0.6),))) is None
+    assert thumbs_up.update(
+        LandmarkFrame(at + timedelta(milliseconds=50), {}, (_thumb_hand("up", 0.55),))
+    ) is None
     detection = thumbs_up.update(
         LandmarkFrame(at + timedelta(milliseconds=100), {}, (_thumb_hand("up", 0.48),))
     )
@@ -277,6 +280,9 @@ def test_thumbs_up_move_up_and_thumbs_down_move_down() -> None:
     assert detection.motion_code == "MOTION_THUMBS_UP_MOVE_UP"
     assert thumbs_up.update(
         LandmarkFrame(at + timedelta(milliseconds=200), {}, (_thumb_hand("up", 0.6),))
+    ) is None
+    assert thumbs_up.update(
+        LandmarkFrame(at + timedelta(milliseconds=250), {}, (_thumb_hand("up", 0.55),))
     ) is None
     detection = thumbs_up.update(
         LandmarkFrame(at + timedelta(milliseconds=300), {}, (_thumb_hand("up", 0.48),))
@@ -293,10 +299,24 @@ def test_thumbs_up_move_up_and_thumbs_down_move_down() -> None:
     assert thumbs_down.update(
         LandmarkFrame(at, down_pose, (_thumb_hand("down", 0.45),))
     ) is None
+    assert thumbs_down.update(
+        LandmarkFrame(
+            at + timedelta(milliseconds=100),
+            down_pose,
+            (_thumb_hand("down", 0.45),),
+        )
+    ) is None
+    assert thumbs_down.update(
+        LandmarkFrame(
+            at + timedelta(milliseconds=200),
+            down_pose,
+            (_thumb_hand("down", 0.45),),
+        )
+    ) is None
     detection = thumbs_down.update(
         LandmarkFrame(
             at + timedelta(milliseconds=300),
-            {**down_pose, "RIGHT_WRIST": Landmark(0.5, 0.57, visibility=0.9)},
+            {**down_pose, "RIGHT_WRIST": Landmark(0.5, 0.65, visibility=0.9)},
             (),
         )
     )
@@ -311,12 +331,116 @@ def test_thumbs_up_move_up_and_thumbs_down_move_down() -> None:
     ) is None
     detection = thumbs_down.update(
         LandmarkFrame(
+            at + timedelta(milliseconds=500),
+            {**down_pose, "RIGHT_WRIST": Landmark(0.5, 0.47, visibility=0.9)},
+            (_thumb_hand("down", 0.47),),
+        )
+    )
+    assert detection is None
+    assert thumbs_down.update(
+        LandmarkFrame(
+            at + timedelta(milliseconds=600),
+            {**down_pose, "RIGHT_WRIST": Landmark(0.5, 0.47, visibility=0.9)},
+            (_thumb_hand("down", 0.47),),
+        )
+    ) is None
+    assert thumbs_down.update(
+        LandmarkFrame(
             at + timedelta(milliseconds=700),
-            {**down_pose, "RIGHT_WRIST": Landmark(0.5, 0.59, visibility=0.9)},
+            {**down_pose, "RIGHT_WRIST": Landmark(0.47, 0.47, visibility=0.9)},
+            (_thumb_hand("down", 0.47),),
+        )
+    ) is None
+    detection = thumbs_down.update(
+        LandmarkFrame(
+            at + timedelta(milliseconds=800),
+            {**down_pose, "RIGHT_WRIST": Landmark(0.5, 0.75, visibility=0.9)},
+            (),
+        )
+    )
+    # A continuous sequence cannot emit a duplicate after the first event.
+    assert detection is None
+
+
+def test_thumbs_down_conflicting_good_pose_clears_latch_safely() -> None:
+    at = datetime(2026, 8, 5, tzinfo=timezone.utc)
+    rule = ThumbsDownMoveDownRule(cooldown_seconds=0.0)
+    pose = {
+        "RIGHT_WRIST": Landmark(0.5, 0.45, visibility=0.9),
+        "LEFT_SHOULDER": Landmark(0.6, 0.5, visibility=0.9),
+        "RIGHT_SHOULDER": Landmark(0.4, 0.5, visibility=0.9),
+    }
+
+    for offset in (0, 100, 200):
+        assert rule.update(
+            LandmarkFrame(
+                at + timedelta(milliseconds=offset),
+                pose,
+                (_thumb_hand("down", 0.45),),
+            )
+        ) is None
+    detection = rule.update(
+        LandmarkFrame(
+            at + timedelta(milliseconds=300),
+            {**pose, "RIGHT_WRIST": Landmark(0.5, 0.65, visibility=0.9)},
             (),
         )
     )
     assert detection is not None
+
+    good_pose = {**pose, "RIGHT_WRIST": Landmark(0.5, 0.65, visibility=0.9)}
+    assert rule.update(
+        LandmarkFrame(
+            at + timedelta(milliseconds=400),
+            good_pose,
+            (_thumb_hand("up", 0.65),),
+        )
+    ) is None
+    # The following frame used to raise AssertionError because the Good pose
+    # cleared _gate_baseline_y but left _latched set.
+    assert rule.update(
+        LandmarkFrame(
+            at + timedelta(milliseconds=500),
+            good_pose,
+            (_thumb_hand("up", 0.65),),
+        )
+    ) is None
+
+
+def test_thumbs_down_is_suppressed_while_the_other_hand_is_swiping_left() -> None:
+    at = datetime(2026, 8, 5, tzinfo=timezone.utc)
+    rule = ThumbsDownMoveDownRule(cooldown_seconds=0.0)
+    shoulders = {
+        "LEFT_SHOULDER": Landmark(0.6, 0.5, visibility=0.9),
+        "RIGHT_SHOULDER": Landmark(0.4, 0.5, visibility=0.9),
+    }
+
+    def frame_at(
+        milliseconds: int,
+        *,
+        left_wrist_x: float,
+        right_wrist_y: float,
+        with_right_hand: bool = True,
+    ) -> LandmarkFrame:
+        pose = {
+            **shoulders,
+            "LEFT_WRIST": Landmark(left_wrist_x, 0.65, visibility=0.9),
+            "RIGHT_WRIST": Landmark(0.5, right_wrist_y, visibility=0.9),
+        }
+        hands = (_thumb_hand("down", right_wrist_y),) if with_right_hand else ()
+        return LandmarkFrame(at + timedelta(milliseconds=milliseconds), pose, hands)
+
+    # Establish a Bad gate while the left hand is still at the chest.
+    assert rule.update(frame_at(0, left_wrist_x=0.50, right_wrist_y=0.45)) is None
+    assert rule.update(frame_at(100, left_wrist_x=0.50, right_wrist_y=0.45)) is None
+    assert rule.update(frame_at(200, left_wrist_x=0.50, right_wrist_y=0.45)) is None
+
+    # The left swipe becomes active before the right wrist moves down.  That
+    # cross-hand motion must invalidate the pending Bad sequence.
+    assert rule.update(frame_at(300, left_wrist_x=0.75, right_wrist_y=0.45)) is None
+    assert rule.update(
+        frame_at(400, left_wrist_x=0.85, right_wrist_y=0.65, with_right_hand=False)
+    ) is None
 
 
 def test_thumbs_up_cooldown_blocks_a_quick_duplicate() -> None:
@@ -325,13 +449,19 @@ def test_thumbs_up_cooldown_blocks_a_quick_duplicate() -> None:
 
     assert rule.update(LandmarkFrame(at, {}, (_thumb_hand("up", 0.6),))) is None
     assert rule.update(
-        LandmarkFrame(at + timedelta(milliseconds=100), {}, (_thumb_hand("up", 0.48),))
-    ) is not None
-    assert rule.update(
-        LandmarkFrame(at + timedelta(milliseconds=200), {}, (_thumb_hand("up", 0.6),))
+        LandmarkFrame(at + timedelta(milliseconds=100), {}, (_thumb_hand("up", 0.55),))
     ) is None
     assert rule.update(
-        LandmarkFrame(at + timedelta(milliseconds=300), {}, (_thumb_hand("up", 0.48),))
+        LandmarkFrame(at + timedelta(milliseconds=200), {}, (_thumb_hand("up", 0.48),))
+    ) is not None
+    assert rule.update(
+        LandmarkFrame(at + timedelta(milliseconds=300), {}, (_thumb_hand("up", 0.6),))
+    ) is None
+    assert rule.update(
+        LandmarkFrame(at + timedelta(milliseconds=400), {}, (_thumb_hand("up", 0.55),))
+    ) is None
+    assert rule.update(
+        LandmarkFrame(at + timedelta(milliseconds=500), {}, (_thumb_hand("up", 0.48),))
     ) is None
 
 

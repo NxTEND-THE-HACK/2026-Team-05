@@ -75,6 +75,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             )
         ),
         frame_poll_interval_seconds=settings.frame_poll_interval_seconds,
+        detection_min_confidence=settings.detection_min_confidence,
     )
     logging.getLogger(__name__).info(
         "recognition worker started camera_id=%s delivery=%s",

@@ -204,6 +204,26 @@ def _write_landmark_overlay(
         name: point(landmark)
         for name, landmark in landmarks.pose.items()
     }
+
+    def line(
+        first: tuple[int, int] | None,
+        second: tuple[int, int] | None,
+        color: tuple[int, int, int],
+        thickness: int,
+    ) -> None:
+        if first is not None and second is not None:
+            cv2.line(image, first, second, color, thickness, cv2.LINE_AA)
+
+    # Draw the MediaPipe topology as well as the points.  Points alone are
+    # hard to read on the black diagnostic canvas and make a detected person
+    # look like unrelated dots in the dashboard.
+    for first_name, second_name in _POSE_CONNECTIONS:
+        line(
+            pose_points.get(first_name),
+            pose_points.get(second_name),
+            (40, 220, 90),
+            3,
+        )
     for item in pose_points.values():
         if item is not None:
             cv2.circle(image, item, 5, (40, 220, 90), -1, cv2.LINE_AA)
@@ -219,6 +239,14 @@ def _write_landmark_overlay(
             if hand.handedness.lower() == "right"
             else (40, 180, 255)
         )
+        for first_index, second_index in _HAND_CONNECTIONS:
+            if first_index < len(hand_points) and second_index < len(hand_points):
+                line(
+                    hand_points[first_index],
+                    hand_points[second_index],
+                    color,
+                    2,
+                )
         for item in hand_points:
             if item is not None:
                 cv2.circle(image, item, 4, color, -1, cv2.LINE_AA)

@@ -13,6 +13,9 @@ class ConfigurationError(ValueError):
     """Raised when required worker configuration is missing or invalid."""
 
 
+DEFAULT_DETECTION_MIN_CONFIDENCE = 0.50
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     camera_id: str
@@ -27,6 +30,7 @@ class Settings:
     reconnect_max_seconds: float = 30.0
     detection_send_retries: int = 3
     detection_send_timeout_seconds: float = 3.0
+    detection_min_confidence: float = DEFAULT_DETECTION_MIN_CONFIDENCE
     frame_poll_interval_seconds: float = 0.001
     camera_stale_after_seconds: float = 3.0
     pose_model_path: str = "models/pose_landmarker_full.task"
@@ -86,6 +90,11 @@ class Settings:
         timeout = _positive_float(
             values, "DETECTION_SEND_TIMEOUT_SECONDS", 3.0
         )
+        detection_min_confidence = _unit_float(
+            values,
+            "DETECTION_MIN_CONFIDENCE",
+            DEFAULT_DETECTION_MIN_CONFIDENCE,
+        )
         poll_interval = _positive_float(
             values, "FRAME_POLL_INTERVAL_SECONDS", 0.001
         )
@@ -132,6 +141,7 @@ class Settings:
             reconnect_max_seconds=maximum,
             detection_send_retries=retries,
             detection_send_timeout_seconds=timeout,
+            detection_min_confidence=detection_min_confidence,
             frame_poll_interval_seconds=poll_interval,
             camera_stale_after_seconds=camera_stale_after,
             pose_model_path=pose_model_path,

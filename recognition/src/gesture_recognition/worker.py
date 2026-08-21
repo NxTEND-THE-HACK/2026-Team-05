@@ -26,17 +26,21 @@ class RecognitionWorker:
         engine: GestureEngineLike,
         client: object,
         frame_poll_interval_seconds: float = 0.001,
+        detection_min_confidence: float = 0.50,
     ) -> None:
         if not camera_id:
             raise ValueError("camera_id must not be empty")
         if frame_poll_interval_seconds <= 0:
             raise ValueError("frame_poll_interval_seconds must be positive")
+        if not 0.0 <= detection_min_confidence <= 1.0:
+            raise ValueError("detection_min_confidence must be between 0 and 1")
         self.camera_id = camera_id
         self._source = source
         self._detector = detector
         self._engine = engine
         self._client = client
         self._poll_interval = frame_poll_interval_seconds
+        self._detection_min_confidence = detection_min_confidence
 
     def run(self, stop_event: Event | None = None) -> None:
         stop = stop_event or Event()
@@ -57,6 +61,17 @@ class RecognitionWorker:
                     continue
 
                 for detection in self._engine.update(landmarks):
+                    if detection.confidence < self._detection_min_confidence:
+                        logger.debug(
+                            "detection rejected below confidence threshold "
+                            "camera_id=%s motion_code=%s confidence=%.3f "
+                            "threshold=%.3f",
+                            self.camera_id,
+                            detection.motion_code,
+                            detection.confidence,
+                            self._detection_min_confidence,
+                        )
+                        continue
                     event = DetectionEvent.create(
                         camera_id=self.camera_id,
                         motion_code=detection.motion_code,

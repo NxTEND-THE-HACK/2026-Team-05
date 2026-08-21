@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Event
 
 from gesture_recognition.domain.models import CapturedFrame, HandObservation, Landmark, LandmarkFrame
+from gesture_recognition.gestures.base import GestureDetection
 from gesture_recognition.gestures.engine import GestureEngine
 from gesture_recognition.gestures.rules import RightHandRaisedRule
 from gesture_recognition.worker import RecognitionWorker
@@ -64,6 +65,23 @@ class FakeClient:
         self.stop.set()
 
 
+class ThresholdEngine:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def update(self, _frame: LandmarkFrame):
+        self.calls += 1
+        if self.calls == 1:
+            return (
+                GestureDetection("LOW_CONFIDENCE", 0.49),
+                GestureDetection("ACCEPTED", 0.50),
+            )
+        return ()
+
+    def reset(self) -> None:
+        pass
+
+
 def test_worker_connects_pipeline_and_delivers_detection() -> None:
     stop = Event()
     source = FakeSource()
@@ -85,3 +103,20 @@ def test_worker_connects_pipeline_and_delivers_detection() -> None:
     assert detector.calls == 2
     assert len(client.events) == 1
     assert client.events[0].camera_id == "camera-1"
+
+def test_worker_does_not_deliver_detection_below_confidence_threshold() -> None:
+    stop = Event()
+    client = FakeClient(stop)
+    worker = RecognitionWorker(
+        camera_id="camera-1",
+        source=FakeSource(),
+        detector=FakeDetector(),
+        engine=ThresholdEngine(),
+        client=client,
+        detection_min_confidence=0.50,
+    )
+
+    worker.run(stop)
+
+    assert [event.motion_code for event in client.events] == ["ACCEPTED"]
+    assert client.events[0].confidence == 0.50

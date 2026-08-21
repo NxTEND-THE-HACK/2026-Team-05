@@ -28,6 +28,7 @@ CAMERA_WEBCAM_PROFILE=micon
 CAMERA_WEBCAM_FPS=15
 CAMERA_WEBCAM_JPEG_QUALITY=80
 GO_API_URL=http://192.168.50.11:8080/internal/detections
+DETECTION_MIN_CONFIDENCE=0.5
 ```
 
 See `.env.example` for the complete list of settings.
@@ -85,12 +86,19 @@ KNN_K=3
 CONFIRMATION_COUNT=2
 RECOGNITION_COOLDOWN_SECONDS=1
 RECOGNITION_RESET_GAP_SECONDS=1.5
+DETECTION_MIN_CONFIDENCE=0.5
 ```
 
 Thresholds are stored per motion in the reference asset. A classification
 whose nearest selected-motion distance exceeds that threshold is treated as
 `UNKNOWN` and is not sent to the Go API. The settings are tunable through the
 environment; changing them does not change the `/internal/detections` API.
+
+The delivery guard uses `DETECTION_MIN_CONFIDENCE=0.5` by default. This value
+was calibrated with 20 samples for each of the six currently used motions
+(120 segmented samples total): every positive sample remained detectable and
+the replay produced no off-diagonal detections. The worker applies this guard
+before sending a detection event to the Go API.
 
 The legacy fixed-rule implementation remains available as a compatibility
 fallback and for the recording evaluator. Its motion-code catalogue is:

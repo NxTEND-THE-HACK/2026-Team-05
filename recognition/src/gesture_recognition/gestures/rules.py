@@ -165,6 +165,7 @@ class _SwipeRule:
     start_min_vertical_offset: float = 0.25
     start_max_vertical_offset: float = 1.70
     maximum_event_elapsed_seconds: float | None = 1.50
+    maximum_event_wrist_y: float | None = None
 
     _start_x: float | None = None
     _latched: bool = False
@@ -214,6 +215,17 @@ class _SwipeRule:
                 > self.maximum_event_elapsed_seconds
             ):
                 return None
+            if (
+                self.maximum_event_wrist_y is not None
+                and wrist.y > self.maximum_event_wrist_y
+            ):
+                # A large horizontal displacement at a low image-space Y is
+                # commonly the vertical thumb motion being mistaken for a
+                # swipe. Consume that path until the wrist returns to the
+                # baseline instead of allowing a later frame to fire it.
+                self._latched = True
+                self._peak_movement = movement
+                return None
             self._latched = True
             self._peak_movement = movement
             return GestureDetection(
@@ -247,6 +259,12 @@ class _SwipeRule:
         self._peak_movement = None
         self._started_at = None
 
+    @property
+    def is_active(self) -> bool:
+        """Return whether this swipe sequence has fired and is latched."""
+
+        return self._latched
+
 
 class SwipeRightRule(_SwipeRule):
     """Detect the person's rightward movement in a front-facing stream.
@@ -255,9 +273,21 @@ class SwipeRightRule(_SwipeRule):
     so the normalized image X coordinate decreases.
     """
 
-    def __init__(self, *, movement_threshold: float = 0.18, reset_margin: float = 0.05) -> None:
+    def __init__(
+        self,
+        *,
+        movement_threshold: float = 0.18,
+        reset_margin: float = 0.05,
+        maximum_event_wrist_y: float = 0.60,
+    ) -> None:
         super().__init__(
-            RIGHT_WRIST, RIGHT_SHOULDER, -1.0, "MOTION_SWIPE_RIGHT", movement_threshold, reset_margin
+            RIGHT_WRIST,
+            RIGHT_SHOULDER,
+            -1.0,
+            "MOTION_SWIPE_RIGHT",
+            movement_threshold,
+            reset_margin,
+            maximum_event_wrist_y=maximum_event_wrist_y,
         )
 
 
@@ -1071,14 +1101,14 @@ class FingerSnapRule:
     """
 
     motion_code: str = "MOTION_FINGER_SNAP"
-    extended_index_angle: float = 150.0
+    extended_index_angle: float = 160.0
     extended_thumb_angle: float = 105.0
-    curled_finger_angle: float = 150.0
+    curled_finger_angle: float = 165.0
     thumb_middle_contact_ratio: float = 1.35
-    post_snap_contact_ratio: float = 0.50
-    minimum_post_snap_thumb_vertical_gap: float = -0.05
-    strict_pose_match_distance: float = 0.16
-    minimum_detection_interval_seconds: float = 1.50
+    post_snap_contact_ratio: float = 0.60
+    minimum_post_snap_thumb_vertical_gap: float = 0.0
+    strict_pose_match_distance: float = 0.20
+    minimum_detection_interval_seconds: float = 1.80
 
     _armed: bool = False
     _latched: bool = False
@@ -1202,7 +1232,10 @@ def _is_thumbs_up(hand: HandObservation) -> bool:
 
 def _is_thumbs_down(hand: HandObservation) -> bool:
     return (
-        _joint_angle(hand, 2, 3, 4) >= 105.0
+        # A loose thumb angle made ordinary hand transitions look like Bad
+        # when the wrist was also moving down.  The collected Bad samples
+        # retain a clearly extended thumb at 150 degrees or more.
+        _joint_angle(hand, 2, 3, 4) >= 150.0
         and _other_fingers_curled(hand, 155.0)
         and hand.point(4).y >= hand.point(0).y + 0.03
     )
@@ -1210,63 +1243,98 @@ def _is_thumbs_down(hand: HandObservation) -> bool:
 
 @dataclass(slots=True)
 class _ThumbVerticalMotionRule:
-    """Detect a vertical movement that starts in a right-hand thumb pose."""
+    """Detect a vertical movement after a stable right-hand thumb pose.
+
+    The collected ``Good -> up`` samples held the thumb shape for several
+    frames before the wrist moved.  The false positives were isolated,
+    one-frame shape matches.  The rule therefore combines a stable pose with
+    a real Pose-wrist trajectory.  Hand landmarks identify the pose; Pose
+    wrist landmarks measure the arm motion and survive hand-detector dropout
+    better than a hand wrist alone.
+    """
 
     pose_name: str
     direction: float
     motion_code: str
-    movement_threshold: float = 0.10
+    movement_threshold: float = 0.12
     reset_margin: float = 0.05
     cooldown_seconds: float = 0.75
+    minimum_pose_frames: int = 3
+    minimum_event_wrist_y: float | None = None
 
-    _start_y: float | None = None
-    _armed: bool = False
+    _baseline_y: float | None = None
+    _pose_run: int = 0
     _latched: bool = False
     _peak_movement: float = 0.0
     _last_detection_at: datetime | None = None
 
     def update(self, frame: LandmarkFrame) -> GestureDetection | None:
+        wrist = frame.pose.get(RIGHT_WRIST)
+        if wrist is not None and not _visible(wrist):
+            wrist = None
         hand = _hand_for_pose(frame, RIGHT_WRIST, "Right")
-        if hand is None or len(hand.landmarks) < 21:
+        if wrist is None and hand is not None and len(hand.landmarks) >= 21:
+            wrist = hand.point(0)
+        if wrist is None:
+            self.reset()
             return None
 
-        pose = (
+        pose = hand is not None and len(hand.landmarks) >= 21 and (
             _is_thumbs_up(hand)
             if self.pose_name == "up"
             else _is_thumbs_down(hand)
         )
+        # In image coordinates an upward movement decreases Y.  Keep the
+        # lowest wrist position seen before the gesture as the baseline.
+        if self._baseline_y is None:
+            self._baseline_y = wrist.y
+        elif self.direction > 0:
+            self._baseline_y = max(self._baseline_y, wrist.y)
+        else:
+            self._baseline_y = min(self._baseline_y, wrist.y)
+
         if self._latched:
-            assert self._start_y is not None
-            movement = self.direction * (self._start_y - hand.point(0).y)
+            assert self._baseline_y is not None
+            movement = self.direction * (self._baseline_y - wrist.y)
             self._peak_movement = max(self._peak_movement, movement)
             if not pose:
-                self.reset()
+                # Do not unlock on a transient HandLandmarker dropout.  A
+                # forward open palm above is the explicit neutral separator;
+                # without it, the same interval must not emit twice.
+                if (
+                    hand is not None
+                    and len(hand.landmarks) >= 21
+                    and _is_forward_open_palm(hand)
+                ):
+                    self.reset()
             elif movement <= self._peak_movement - self.reset_margin:
-                # The hand has returned toward its lower/resting position.
-                # Re-arm from the current position while keeping the thumb-up
-                # pose, so the next upward flick can fire again.
-                self._start_y = hand.point(0).y
-                self._armed = True
+                # Re-arm from the current position, but require a fresh
+                # stable pose before another event can be emitted.
+                self._baseline_y = wrist.y
+                self._pose_run = 1
                 self._latched = False
                 self._peak_movement = 0.0
             return None
 
         if not pose:
-            if self._armed:
-                self.reset()
+            self._pose_run = 0
             return None
 
-        if not self._armed:
-            self._armed = True
-            self._start_y = hand.point(0).y
-            self._peak_movement = 0.0
+        self._pose_run += 1
+        if self._pose_run < self.minimum_pose_frames:
             return None
 
-        assert self._start_y is not None
-        movement = self.direction * (self._start_y - hand.point(0).y)
+        assert self._baseline_y is not None
+        movement = self.direction * (self._baseline_y - wrist.y)
         if movement < self.movement_threshold:
-            if movement < 0:
-                self._start_y = hand.point(0).y
+            return None
+
+        if (
+            self.minimum_event_wrist_y is not None
+            and wrist.y < self.minimum_event_wrist_y
+        ):
+            # A hand already above this region is a held raised-hand pose,
+            # not the collected Good -> up motion.
             return None
 
         if (
@@ -1288,8 +1356,8 @@ class _ThumbVerticalMotionRule:
         return GestureDetection(self.motion_code, confidence)
 
     def reset(self) -> None:
-        self._start_y = None
-        self._armed = False
+        self._baseline_y = None
+        self._pose_run = 0
         self._latched = False
         self._peak_movement = 0.0
 
@@ -1300,33 +1368,43 @@ class ThumbsUpMoveUpRule(_ThumbVerticalMotionRule):
     def __init__(
         self,
         *,
-        movement_threshold: float = 0.015,
+        movement_threshold: float = 0.12,
+        minimum_pose_frames: int = 3,
+        minimum_event_wrist_y: float = 0.40,
         cooldown_seconds: float = 0.75,
     ) -> None:
+        if minimum_pose_frames < 1:
+            raise ValueError("minimum_pose_frames must be positive")
         super().__init__(
             "up",
             1.0,
             "MOTION_THUMBS_UP_MOVE_UP",
             movement_threshold,
             cooldown_seconds=cooldown_seconds,
+            minimum_pose_frames=minimum_pose_frames,
+            minimum_event_wrist_y=minimum_event_wrist_y,
         )
 
 
-class ThumbsDownMoveDownRule(_PoseVerticalMotionRule):
-    """Detect a right-wrist movement from the torso toward the floor.
+class ThumbsDownMoveDownRule:
+    """Detect a stable Bad pose followed by a downward wrist movement.
 
-    The thumb-down pose is required as a short-lived gate. The collected
-    camera data showed that the HandLandmarker frequently lost that shape
-    during the movement, so the Pose wrist trajectory carries the motion
-    after the gate has been observed.
+    All ten collected ``Bad -> down`` samples contain at least three
+    consecutive thumb-down frames, while the other collected motions contain
+    no such run.  The gate is therefore deliberately strict; once it is
+    satisfied, Pose carries the downward trajectory so temporary hand
+    landmark dropout does not lose a real gesture.
     """
 
     def __init__(
         self,
         *,
-        movement_threshold: float = 0.10,
+        movement_threshold: float = 0.18,
         maximum_hand_pose_distance: float = 0.15,
         cooldown_seconds: float = 0.75,
+        minimum_pose_frames: int = 3,
+        pose_gate_seconds: float = 3.0,
+        reset_margin: float = 0.05,
         maximum_event_vertical_offset: float = 1.60,
         maximum_event_elapsed_seconds: float = 2.30,
         minimum_pose_gate_age_without_hand: float = 0.211,
@@ -1334,38 +1412,144 @@ class ThumbsDownMoveDownRule(_PoseVerticalMotionRule):
         minimum_stale_pose_gate_elapsed: float = 0.30,
         maximum_stale_pose_gate_vertical_offset: float = 1.0,
     ) -> None:
-        super().__init__(
-            RIGHT_WRIST,
-            1.0,
-            "MOTION_THUMBS_DOWN_MOVE_DOWN",
-            movement_threshold,
-            maximum_hand_pose_distance=maximum_hand_pose_distance,
-            cooldown_seconds=cooldown_seconds,
-            maximum_event_vertical_offset=maximum_event_vertical_offset,
-            maximum_event_elapsed_seconds=maximum_event_elapsed_seconds,
-            minimum_pose_gate_age_without_hand=minimum_pose_gate_age_without_hand,
-            maximum_stale_pose_gate_age=maximum_stale_pose_gate_age,
-            minimum_stale_pose_gate_elapsed=minimum_stale_pose_gate_elapsed,
-            maximum_stale_pose_gate_vertical_offset=maximum_stale_pose_gate_vertical_offset,
-        )
+        if minimum_pose_frames < 1:
+            raise ValueError("minimum_pose_frames must be positive")
+        if pose_gate_seconds <= 0:
+            raise ValueError("pose_gate_seconds must be positive")
+        self.motion_code = "MOTION_THUMBS_DOWN_MOVE_DOWN"
+        self.movement_threshold = movement_threshold
+        self.maximum_hand_pose_distance = maximum_hand_pose_distance
+        self.cooldown_seconds = cooldown_seconds
+        self.minimum_pose_frames = minimum_pose_frames
+        self.pose_gate_seconds = pose_gate_seconds
+        self.reset_margin = reset_margin
 
-    def _pose_is_ready(self, frame: LandmarkFrame) -> bool:
+        # These names remain available for callers that configured the former
+        # PoseVerticalMotionRule.  The stable-pose gate and trajectory below
+        # are the authoritative checks now.
+        self.maximum_event_vertical_offset = maximum_event_vertical_offset
+        self.maximum_event_elapsed_seconds = maximum_event_elapsed_seconds
+        self.minimum_pose_gate_age_without_hand = minimum_pose_gate_age_without_hand
+        self.maximum_stale_pose_gate_age = maximum_stale_pose_gate_age
+        self.minimum_stale_pose_gate_elapsed = minimum_stale_pose_gate_elapsed
+        self.maximum_stale_pose_gate_vertical_offset = maximum_stale_pose_gate_vertical_offset
+
+        self._baseline_y: float | None = None
+        self._gate_baseline_y: float | None = None
+        self._pose_run = 0
+        self._pose_seen_at: datetime | None = None
+        self._latched = False
+        self._peak_movement = 0.0
+        self._last_detection_at: datetime | None = None
+        # A left-hand swipe can make the otherwise idle right hand briefly
+        # resemble a Bad pose.  Track the same swipe state here so the Bad
+        # rule can suppress that cross-hand false positive without coupling
+        # the generic GestureEngine to specific motion codes.
+        self._opposite_swipe_rule = SwipeLeftRule()
+
+    def update(self, frame: LandmarkFrame) -> GestureDetection | None:
+        self._opposite_swipe_rule.update(frame)
+        if self._opposite_swipe_rule.is_active:
+            self._clear_sequence()
+            return None
+
+        wrist = frame.pose.get(RIGHT_WRIST)
+        if wrist is None or not _visible(wrist):
+            self.reset()
+            return None
+
         hand = _hand_for_pose(
             frame,
             RIGHT_WRIST,
             "Right",
             self.maximum_hand_pose_distance,
         )
-        return hand is not None and len(hand.landmarks) >= 21 and _is_thumbs_down(hand)
+        has_hand = hand is not None and len(hand.landmarks) >= 21
+        pose_ready = has_hand and _is_thumbs_down(hand)
+        pose_conflicting = has_hand and _is_thumbs_up(hand)
 
-    def _pose_is_conflicting(self, frame: LandmarkFrame) -> bool:
-        hand = _hand_for_pose(
-            frame,
-            RIGHT_WRIST,
-            "Right",
-            self.maximum_hand_pose_distance,
+        # Downward motion increases image-space Y, so the highest pre-motion
+        # wrist position is the useful baseline.
+        if self._baseline_y is None:
+            self._baseline_y = wrist.y
+        else:
+            self._baseline_y = min(self._baseline_y, wrist.y)
+
+        if pose_conflicting:
+            # A Good pose invalidates any older Bad gate.
+            # Reset the latch together with the gate.  Clearing only the gate
+            # leaves the rule in an impossible state and the next frame used
+            # to fail on the assertion in the latched branch.
+            self.reset()
+            return None
+
+        if self._latched:
+            # Keep the state machine defensive even if a future transition
+            # clears the gate while a latch is still set.
+            if self._gate_baseline_y is None:
+                self._latched = False
+                self._peak_movement = 0.0
+                return None
+            movement = wrist.y - self._gate_baseline_y
+            self._peak_movement = max(self._peak_movement, movement)
+            # Stay latched for the rest of this continuous sequence.  A
+            # transient hand-shape change or detector dropout is not enough
+            # to turn one physical movement into two events.  The forward
+            # open-palm marker is the explicit neutral separator used by the
+            # collector and is the only normal re-arm path.
+            if has_hand and _is_forward_open_palm(hand):
+                self.reset()
+            return None
+
+        if pose_ready:
+            self._pose_run += 1
+            if self._pose_run >= self.minimum_pose_frames:
+                self._pose_seen_at = frame.captured_at
+                self._gate_baseline_y = self._baseline_y
+        else:
+            self._pose_run = 0
+
+        if self._gate_baseline_y is None or self._pose_seen_at is None:
+            return None
+
+        gate_age = (frame.captured_at - self._pose_seen_at).total_seconds()
+        if gate_age < 0 or gate_age > self.pose_gate_seconds:
+            self._gate_baseline_y = None
+            self._pose_seen_at = None
+            return None
+
+        movement = wrist.y - self._gate_baseline_y
+        if movement < self.movement_threshold:
+            return None
+
+        if (
+            self._last_detection_at is not None
+            and (frame.captured_at - self._last_detection_at).total_seconds()
+            < self.cooldown_seconds
+        ):
+            self._latched = True
+            self._peak_movement = movement
+            return None
+
+        self._latched = True
+        self._peak_movement = movement
+        self._last_detection_at = frame.captured_at
+        return GestureDetection(
+            self.motion_code,
+            min(1.0, max(0.0, movement / (self.movement_threshold * 2))),
         )
-        return hand is not None and len(hand.landmarks) >= 21 and _is_thumbs_up(hand)
+
+    def reset(self) -> None:
+        self._clear_sequence()
+        self._opposite_swipe_rule.reset()
+
+    def _clear_sequence(self) -> None:
+        self._baseline_y = None
+        self._gate_baseline_y = None
+        self._pose_run = 0
+        self._pose_seen_at = None
+        self._latched = False
+        self._peak_movement = 0.0
 
 
 @dataclass(slots=True)
@@ -1451,6 +1635,22 @@ def _is_open_palm(hand: HandObservation) -> bool:
                 (17, 18, 20),
             )
         )
+    )
+
+
+def _is_forward_open_palm(hand: HandObservation) -> bool:
+    """Return whether an open palm matches the collection neutral marker."""
+
+    if not _is_open_palm(hand) or len(hand.landmarks) < 21:
+        return False
+    wrist = hand.point(0)
+    xs = [landmark.x for landmark in hand.landmarks]
+    ys = [landmark.y for landmark in hand.landmarks]
+    area = (max(xs) - min(xs)) * (max(ys) - min(ys))
+    return (
+        0.20 <= wrist.x <= 0.80
+        and 0.25 <= wrist.y <= 0.75
+        and area >= 0.01
     )
 
 
