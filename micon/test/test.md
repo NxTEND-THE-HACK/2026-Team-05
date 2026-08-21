@@ -23,12 +23,17 @@ pio device monitor
 ```powershell
 curl.exe http://CAMERA_IP/health
 curl.exe http://CAMERA_IP/snapshot --output snapshot.jpg
-curl.exe -N http://CAMERA_IP:81/sound-events
 ```
 
 `http://CAMERA_IP/stream` をブラウザまたはPythonワーカーから開き、MJPEGが連続表示されることを確認する。
+`/health` の `camera_frame_ready` が `true` になり、`/stream` を2クライアント以上から同時に開いても各クライアントへフレームが届くことを確認する。PowerShellでは次のように2本を同時起動できる。
 
-`sound-events` は1秒ごとのheartbeatを表示し、拍手または指パッチンで `type=sound` を1回表示することを確認する。イベントJSONにPCMや音量値が含まれないことも確認する。
+```powershell
+Start-Job { curl.exe -N http://CAMERA_IP/stream --output stream-1.mjpeg }
+Start-Job { curl.exe -N http://CAMERA_IP/stream --output stream-2.mjpeg }
+curl.exe http://CAMERA_IP/health
+curl.exe http://CAMERA_IP/snapshot --output snapshot-concurrent.jpg
+```
 
 ### 障害確認
 
@@ -36,6 +41,7 @@ curl.exe -N http://CAMERA_IP:81/sound-events
 - `/health` の `camera_id` が2台で異なること。
 - 固定IPを有効にした場合、シリアルログのIPが設定値と一致すること。
 - Pythonワーカーを切断しても、カメラがリセットせず待機すること。
-- 映像と音イベントを同時に10分以上受信しても、映像が15 FPSを超えず、端末が再起動しないこと。
-- 持続音で音イベントが連続発火せず、静かな環境と通常の環境音がある状態の両方で短音を検出できること。
+- カメラフレームが未取得の場合、`/snapshot` と最初の `/stream` が無限待ちにならず、一定時間後に `503 Service Unavailable` を返すこと。
+- `/health` の `camera_frame_ready` が、カメラ取得停止後に古いフレームのまま `true` になり続けないこと。
+- カメラ取得タスクを停止させた場合、`CAMERA_CAPTURE_WATCHDOG_TIMEOUT_MS` 経過後に自動再起動して復旧すること。
 - 映像ファイルがSDカードやフラッシュへ保存されていないこと。

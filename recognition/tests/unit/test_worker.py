@@ -2,10 +2,8 @@ from datetime import datetime, timedelta, timezone
 from threading import Event
 
 from gesture_recognition.domain.models import CapturedFrame, HandObservation, Landmark, LandmarkFrame
-from gesture_recognition.gestures.base import GestureDetection
 from gesture_recognition.gestures.engine import GestureEngine
 from gesture_recognition.gestures.rules import RightHandRaisedRule
-from gesture_recognition.sound.validation import SoundValidationDecision
 from gesture_recognition.worker import RecognitionWorker
 
 
@@ -87,57 +85,3 @@ def test_worker_connects_pipeline_and_delivers_detection() -> None:
     assert detector.calls == 2
     assert len(client.events) == 1
     assert client.events[0].camera_id == "camera-1"
-
-
-def test_worker_does_not_deliver_a_sound_rejected_detection() -> None:
-    stop = Event()
-    source = FakeSource()
-    detector = FakeDetector()
-    client = FakeClient(stop)
-
-    class ClapEngine:
-        def update(self, _landmarks):
-            return (GestureDetection("MOTION_CLAP", 0.9),)
-
-    class RejectingSoundValidator:
-        def __init__(self) -> None:
-            self.started = False
-            self.stopped = False
-
-        def start(self) -> None:
-            self.started = True
-
-        def stop(self) -> None:
-            self.stopped = True
-
-        def poll(self):
-            return ()
-
-        def submit(self, detections, *, detected_at):
-            stop.set()
-            return tuple(
-                SoundValidationDecision(
-                    detection,
-                    detected_at,
-                    "rejected_no_sound",
-                    False,
-                )
-                for detection in detections
-            )
-
-    validator = RejectingSoundValidator()
-    worker = RecognitionWorker(
-        camera_id="camera-1",
-        source=source,
-        detector=detector,
-        engine=ClapEngine(),
-        client=client,
-        sound_validator=validator,  # type: ignore[arg-type]
-    )
-
-    worker.run(stop)
-
-    assert client.events == []
-    assert validator.started is True
-    assert validator.stopped is True
-    assert source.stopped is True

@@ -15,7 +15,6 @@ def test_settings_load_required_values() -> None:
     assert settings.camera_id == "camera-1"
     assert settings.camera_source == "http://camera/stream"
     assert settings.go_api_url == "http://go/internal/detections"
-    assert settings.sound_event_source is None
     assert settings.webcam_index is None
     assert settings.webcam_profile == "micon"
     assert settings.webcam_fps == 15.0
@@ -25,9 +24,6 @@ def test_settings_load_required_values() -> None:
     assert settings.pose_model_path == "models/pose_landmarker_full.task"
     assert settings.hand_model_path == "models/hand_landmarker.task"
     assert settings.camera_stale_after_seconds == 3.0
-    assert settings.sound_stale_after_seconds == 3.0
-    assert settings.sound_match_before_seconds == 1.0
-    assert settings.sound_match_after_seconds == 0.25
     assert settings.motion_samples_path == "models/motion_samples.json"
     assert settings.target_fps == 15.0
     assert settings.window_frames == 30
@@ -55,10 +51,6 @@ def test_settings_load_temporal_recognition_overrides() -> None:
             "RECOGNITION_RESET_GAP_SECONDS": "0.9",
             "MOTION_SAMPLES_PATH": "custom/templates.json",
             "CAMERA_STALE_AFTER_SECONDS": "4.5",
-            "SOUND_EVENT_SOURCE": "http://camera:81/sound-events",
-            "SOUND_STALE_AFTER_SECONDS": "5.5",
-            "SOUND_MATCH_BEFORE_SECONDS": "1.2",
-            "SOUND_MATCH_AFTER_SECONDS": "0.4",
         }
     )
 
@@ -73,10 +65,6 @@ def test_settings_load_temporal_recognition_overrides() -> None:
     assert settings.recognition_reset_gap_seconds == 0.9
     assert settings.motion_samples_path == "custom/templates.json"
     assert settings.camera_stale_after_seconds == 4.5
-    assert settings.sound_event_source == "http://camera:81/sound-events"
-    assert settings.sound_stale_after_seconds == 5.5
-    assert settings.sound_match_before_seconds == 1.2
-    assert settings.sound_match_after_seconds == 0.4
 
 
 def test_settings_load_local_webcam_configuration() -> None:
@@ -130,9 +118,6 @@ def test_settings_reject_invalid_temporal_values() -> None:
         ("KNN_K", "0"),
         ("CONFIRMATION_COUNT", "0"),
         ("CAMERA_STALE_AFTER_SECONDS", "0"),
-        ("SOUND_STALE_AFTER_SECONDS", "0"),
-        ("SOUND_MATCH_BEFORE_SECONDS", "-0.1"),
-        ("SOUND_MATCH_AFTER_SECONDS", "-0.1"),
     ):
         values = {**base, key: value}
         try:

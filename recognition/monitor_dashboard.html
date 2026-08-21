@@ -24,7 +24,6 @@
     .camera-panel.connected .camera-dot { background: #49d391; box-shadow: 0 0 0 4px #49d39122; }
     .camera-panel.connecting .camera-dot, .camera-panel.reconnecting .camera-dot { background: #f3c969; box-shadow: 0 0 0 4px #f3c96922; }
     .camera-panel.stale .camera-dot, .camera-panel.stopped .camera-dot, .camera-panel.error .camera-dot { background: #f27878; box-shadow: 0 0 0 4px #f2787822; }
-    .camera-panel.disabled .camera-dot { background: #9fb0c9; box-shadow: 0 0 0 4px #9fb0c922; }
     .camera-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
     .camera-detail { padding: 12px; border-radius: 10px; background: #202a40; }
     .camera-detail-label { color: #9fb0c9; font-size: 12px; }
@@ -103,37 +102,6 @@
       <div id="camera-error" class="camera-error" hidden></div>
     </section>
 
-    <section id="sound-panel" class="camera-panel" aria-live="polite">
-      <h2>音イベント接続</h2>
-      <div class="camera-summary">
-        <span class="camera-dot" aria-hidden="true"></span>
-        <span id="sound-state">状態取得中...</span>
-      </div>
-      <div class="camera-details">
-        <div class="camera-detail">
-          <div class="camera-detail-label">最終heartbeat</div>
-          <div id="sound-last-message" class="camera-detail-value">-</div>
-        </div>
-        <div class="camera-detail">
-          <div class="camera-detail-label">最終音イベント</div>
-          <div id="sound-last-event" class="camera-detail-value">-</div>
-        </div>
-        <div class="camera-detail">
-          <div class="camera-detail-label">受信イベント</div>
-          <div id="sound-events" class="camera-detail-value">-</div>
-        </div>
-        <div class="camera-detail">
-          <div class="camera-detail-label">再接続回数</div>
-          <div id="sound-reconnects" class="camera-detail-value">-</div>
-        </div>
-        <div class="camera-detail">
-          <div class="camera-detail-label">直近の音確認</div>
-          <div id="sound-validation" class="camera-detail-value">-</div>
-        </div>
-      </div>
-      <div id="sound-error" class="camera-error" hidden></div>
-    </section>
-
     <section class="processing-panel">
       <h2>処理状況</h2>
       <div class="processing-details">
@@ -201,9 +169,9 @@
       <h2>直近の判定</h2>
       <table>
         <thead>
-          <tr><th>時刻</th><th>モーション</th><th>コード</th><th>信頼度</th><th>音確認</th></tr>
+          <tr><th>時刻</th><th>モーション</th><th>コード</th><th>信頼度</th></tr>
         </thead>
-        <tbody id="history"><tr><td colspan="5" class="empty-row">まだ判定はありません</td></tr></tbody>
+        <tbody id="history"><tr><td colspan="4" class="empty-row">まだ判定はありません</td></tr></tbody>
       </table>
     </section>
   </main>
@@ -218,14 +186,6 @@
     const cameraReconnects = document.getElementById("camera-reconnects");
     const cameraRetry = document.getElementById("camera-retry");
     const cameraError = document.getElementById("camera-error");
-    const soundPanel = document.getElementById("sound-panel");
-    const soundState = document.getElementById("sound-state");
-    const soundLastMessage = document.getElementById("sound-last-message");
-    const soundLastEvent = document.getElementById("sound-last-event");
-    const soundEvents = document.getElementById("sound-events");
-    const soundReconnects = document.getElementById("sound-reconnects");
-    const soundValidation = document.getElementById("sound-validation");
-    const soundError = document.getElementById("sound-error");
     const processingOutputFps = document.getElementById("processing-output-fps");
     const processingLoopFps = document.getElementById("processing-loop-fps");
     const processingFps = document.getElementById("processing-fps");
@@ -270,20 +230,6 @@
       STOPPED: ["stopped", "停止"],
     };
 
-    const soundStateLabels = {
-      CONNECTED: ["connected", "接続中"],
-      CONNECTING: ["connecting", "接続試行中"],
-      RECONNECTING: ["reconnecting", "再接続中"],
-      STALE: ["stale", "heartbeat停止"],
-      STOPPED: ["stopped", "停止"],
-    };
-
-    const soundValidationLabels = {
-      confirmed: "音あり・確認済み",
-      rejected_no_sound: "音なし・抑止",
-      fallback: "映像のみ (fallback)",
-    };
-
     function renderCamera(camera) {
       if (!camera) {
         cameraPanel.className = "camera-panel error";
@@ -313,45 +259,6 @@
       } else {
         cameraError.hidden = true;
         cameraError.textContent = "";
-      }
-    }
-
-    function renderSound(sound, validation) {
-      if (!sound) {
-        soundPanel.className = "camera-panel disabled";
-        soundState.textContent = "未設定（映像判定のみ）";
-        soundLastMessage.textContent = "-";
-        soundLastEvent.textContent = "-";
-        soundEvents.textContent = "-";
-        soundReconnects.textContent = "-";
-        soundValidation.textContent = validation
-          ? (soundValidationLabels[validation.result] || validation.result)
-          : "-";
-        soundError.hidden = true;
-        soundError.textContent = "";
-        return;
-      }
-
-      const [className, label] = soundStateLabels[sound.state] || ["error", "不明"];
-      soundPanel.className = `camera-panel ${className}`;
-      soundState.textContent = label;
-      soundLastMessage.textContent = sound.last_message_age_seconds == null
-        ? "未受信"
-        : `${Number(sound.last_message_age_seconds).toFixed(1)}秒前`;
-      soundLastEvent.textContent = sound.last_event_age_seconds == null
-        ? "未検出"
-        : `#${sound.last_event_sequence} / ${Number(sound.last_event_age_seconds).toFixed(1)}秒前`;
-      soundEvents.textContent = `${sound.events_received || 0}回`;
-      soundReconnects.textContent = `${sound.reconnect_count || 0}回`;
-      soundValidation.textContent = validation
-        ? (soundValidationLabels[validation.result] || validation.result)
-        : "未確認";
-      if (sound.last_error) {
-        soundError.hidden = false;
-        soundError.textContent = `原因: ${sound.last_error}`;
-      } else {
-        soundError.hidden = true;
-        soundError.textContent = "";
       }
     }
 
@@ -419,7 +326,6 @@
         ? `判定中　最終更新 ${time(state.updated_at)}`
         : `モニター停止中　最終更新 ${time(state.updated_at)}`;
       renderCamera(state.camera);
-      renderSound(state.sound, state.sound_validation);
       renderLandmarks(state.landmarks);
       renderProcessing(state.processing, state.latest);
 
@@ -457,20 +363,17 @@
       historyElement.replaceChildren();
       if (!state.history || state.history.length === 0) {
         const row = document.createElement("tr");
-        row.innerHTML = '<td colspan="5" class="empty-row">まだ判定はありません</td>';
+        row.innerHTML = '<td colspan="4" class="empty-row">まだ判定はありません</td>';
         historyElement.appendChild(row);
         return;
       }
       for (const item of state.history) {
         const row = document.createElement("tr");
-        row.innerHTML = '<td></td><td></td><td class="code"></td><td class="confidence"></td><td></td>';
+        row.innerHTML = '<td></td><td></td><td class="code"></td><td class="confidence"></td>';
         row.children[0].textContent = time(item.captured_at);
         row.children[1].textContent = item.name;
         row.children[2].textContent = item.motion_code;
         row.children[3].textContent = `${(item.confidence * 100).toFixed(0)}%`;
-        row.children[4].textContent = item.sound_validation
-          ? (soundValidationLabels[item.sound_validation] || item.sound_validation)
-          : "対象外";
         historyElement.appendChild(row);
       }
     }
@@ -483,7 +386,6 @@
       } catch (error) {
         statusElement.textContent = "判定モニターへ接続できません";
         renderCamera(null);
-        renderSound(null, null);
       }
     }
 

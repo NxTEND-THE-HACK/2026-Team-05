@@ -22,7 +22,6 @@ started for each camera.
 ```text
 CAMERA_ID=demo-camera-1
 CAMERA_SOURCE=http://192.168.50.21/stream
-SOUND_EVENT_SOURCE=http://192.168.50.21:81/sound-events
 # For a temporary local-camera test, set CAMERA_WEBCAM_INDEX=0 instead.
 CAMERA_WEBCAM_INDEX=
 CAMERA_WEBCAM_PROFILE=micon
@@ -58,30 +57,16 @@ local receive FPS is reported by the monitor and state file. Override the
 local output rate or JPEG quality with `CAMERA_WEBCAM_FPS` and
 `CAMERA_WEBCAM_JPEG_QUALITY` when matching a measured device rate.
 
-`SOUND_EVENT_SOURCE` is optional. When set, it points to the same
-microcontroller's NDJSON endpoint on port 81. The stream contains only a
-large-short-sound event or a heartbeat; PCM, recorded audio, ambient levels,
-and amplitude values are never received or stored by Python. Leaving the
-setting empty preserves camera-only recognition.
-
 ```text
 MJPEG URL -> latest-frame buffer -> MediaPipe Pose + Hands
           -> shoulder normalization -> EMA smoothing
           -> 2-second sliding window -> DTW + k-NN
           -> UNKNOWN / confirmation / cooldown
-          -> sound confirmation for CLAP / FINGER_SNAP only
           -> POST /internal/detections
 ```
 
-For `MOTION_CLAP` and `MOTION_FINGER_SNAP`, an unused sound event from 1.0
-seconds before through 0.25 seconds after the visual decision confirms the
-candidate. The 0.25-second future window is handled asynchronously. If the
-sound stream is connected but no event matches, the candidate is suppressed.
-If sound is unconfigured, disconnected, or has no heartbeat for three
-seconds, recognition falls back to the visual result. Sound by itself never
-creates a motion, and all other motion codes bypass this check. These defaults
-can be changed with `SOUND_MATCH_BEFORE_SECONDS`,
-`SOUND_MATCH_AFTER_SECONDS`, and `SOUND_STALE_AFTER_SECONDS`.
+Python recognition is camera-only. It does not open a microphone, receive
+sound events, or use audio to confirm motions.
 
 The runtime uses the fixed set of 11 motion codes below. It does not accept
 user-defined motions or add new motion codes at runtime. The reference asset
@@ -209,8 +194,7 @@ never calls the Go API and prints only detected motions:
 
 ```bash
 PYTHONPATH=src python scripts/monitor_detections.py \
-  --camera-source http://10.0.1.107/stream \
-  --sound-event-source http://10.0.1.107:81/sound-events
+  --camera-source http://10.0.1.107/stream
 ```
 
 For a USB or built-in camera, use the local-camera compatibility profile:
@@ -230,10 +214,6 @@ time, MediaPipe inference time, and the timestamp of the latest inference.
 Landmark overlay JPEG generation runs asynchronously at a maximum of 5 FPS;
 override it with `--overlay-fps`. The dashboard uses these values to
 distinguish camera input speed from actual recognition-loop throughput.
-When `--sound-event-source` is set, the CLI and dashboard also show the sound
-connection state, heartbeat age, last sound event, reconnect count, and the
-latest `confirmed`, `rejected_no_sound`, or `fallback` result. Omit the option
-to run the monitor in its previous camera-only mode.
 
 The monitor dashboard also shows camera connection status. This status is
 kept inside the Python process and is not sent to the Go API. The status is
