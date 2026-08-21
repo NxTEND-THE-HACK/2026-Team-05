@@ -249,6 +249,12 @@ GO_API_URL=http://192.168.50.11:8080/internal/detections \
 python -m gesture_recognition.main
 ```
 
+The normal worker startup enables only these seven motions: right-hand up,
+left-hand up, right swipe, left swipe, Good-up, Bad-down, and finger snap.
+Clap, open-to-fist-down, right rotation, and left rotation remain available
+for explicit monitor or test configurations but are disabled by default in the
+normal worker.
+
 To run the normal worker from a local camera without sending detection events
 to Go:
 

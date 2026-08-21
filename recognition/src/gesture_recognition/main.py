@@ -11,6 +11,7 @@ from threading import Event
 from .config import Settings
 from .delivery.go_api_client import GoApiClient
 from .delivery.null import NullDeliveryClient
+from .gestures.catalog import NORMAL_STARTUP_DISABLED_MOTION_CODES
 from .gestures.registry import default_engine
 from .inference.mediapipe_detector import MediaPipeDetector
 from .observability.logging import configure_logging
@@ -55,6 +56,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         ),
         engine=default_engine(
             templates_path=settings.motion_samples_path,
+            disabled_motions=NORMAL_STARTUP_DISABLED_MOTION_CODES,
             target_fps=settings.target_fps,
             window_frames=settings.window_frames,
             inference_stride_frames=settings.inference_stride_frames,
