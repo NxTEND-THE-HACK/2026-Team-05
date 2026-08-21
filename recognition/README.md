@@ -21,7 +21,7 @@ started for each camera.
 
 ```text
 CAMERA_ID=demo-camera-1
-CAMERA_SOURCE=http://192.168.50.21/stream
+CAMERA_SOURCE=http://192.168.10.106/stream
 # For a temporary local-camera test, set CAMERA_WEBCAM_INDEX=0 instead.
 CAMERA_WEBCAM_INDEX=
 CAMERA_WEBCAM_PROFILE=micon
@@ -244,7 +244,7 @@ not a claim that the same motion is present in the current frame.
 
 ```bash
 CAMERA_ID=demo-camera-1 \
-CAMERA_SOURCE=http://192.168.50.21/stream \
+CAMERA_SOURCE=http://192.168.10.106/stream \
 GO_API_URL=http://192.168.50.11:8080/internal/detections \
 python -m gesture_recognition.main
 ```

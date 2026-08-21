@@ -131,7 +131,7 @@ func (p *Postgres) ListMotions(ctx context.Context) ([]domain.Motion, error) {
 }
 
 func (p *Postgres) ListAppliances(ctx context.Context) ([]domain.Appliance, error) {
-	rows, err := p.pool.Query(ctx, `SELECT id, name, category, created_at FROM appliances ORDER BY created_at, id`)
+	rows, err := p.pool.Query(ctx, `SELECT id, name, category, control_provider, controller_id, created_at FROM appliances ORDER BY created_at, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (p *Postgres) ListAppliances(ctx context.Context) ([]domain.Appliance, erro
 	items := []domain.Appliance{}
 	for rows.Next() {
 		var item domain.Appliance
-		if err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.ControlProvider, &item.ControllerID, &item.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -209,12 +209,25 @@ func (p *Postgres) ListLogs(ctx context.Context, limit int) ([]domain.ActionLog,
 }
 
 func (p *Postgres) CreateAppliance(ctx context.Context, input domain.CreateApplianceInput) (domain.Appliance, error) {
+	if input.ControlProvider == "" {
+		input.ControlProvider = domain.ProviderTuya
+	}
 	id, err := domain.NewID("appliance")
 	if err != nil {
 		return domain.Appliance{}, err
 	}
-	item := domain.Appliance{ID: id, Name: input.Name, Category: input.Category, CreatedAt: time.Now().UTC()}
-	_, err = p.pool.Exec(ctx, `INSERT INTO appliances (id, name, category, created_at) VALUES ($1, $2, $3, $4)`, item.ID, item.Name, item.Category, item.CreatedAt)
+	item := domain.Appliance{
+		ID:              id,
+		Name:            input.Name,
+		Category:        input.Category,
+		ControlProvider: input.ControlProvider,
+		ControllerID:    input.ControllerID,
+		CreatedAt:       time.Now().UTC(),
+	}
+	_, err = p.pool.Exec(ctx, `
+		INSERT INTO appliances (id, name, category, control_provider, controller_id, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		item.ID, item.Name, item.Category, item.ControlProvider, item.ControllerID, item.CreatedAt)
 	return item, mapPostgresError(err)
 }
 
@@ -243,6 +256,17 @@ func (p *Postgres) CreateBinding(ctx context.Context, input domain.CreateBinding
 	return item, mapPostgresError(err)
 }
 
+func (p *Postgres) DeleteAction(ctx context.Context, id string) error {
+	tag, err := p.pool.Exec(ctx, `DELETE FROM appliance_actions WHERE id = $1`, id)
+	if err != nil {
+		return mapPostgresError(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (p *Postgres) DeleteBinding(ctx context.Context, id string) error {
 	tag, err := p.pool.Exec(ctx, `DELETE FROM motion_bindings WHERE id = $1`, id)
 	if err != nil {
@@ -265,7 +289,11 @@ func (p *Postgres) ActionByID(ctx context.Context, id string) (domain.Action, er
 
 func (p *Postgres) ApplianceByID(ctx context.Context, id string) (domain.Appliance, error) {
 	var item domain.Appliance
-	err := p.pool.QueryRow(ctx, `SELECT id, name, category, created_at FROM appliances WHERE id = $1`, id).Scan(&item.ID, &item.Name, &item.Category, &item.CreatedAt)
+	err := p.pool.QueryRow(ctx, `
+		SELECT id, name, category, control_provider, controller_id, created_at
+		FROM appliances WHERE id = $1`, id).Scan(
+		&item.ID, &item.Name, &item.Category, &item.ControlProvider, &item.ControllerID, &item.CreatedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Appliance{}, ErrNotFound
 	}

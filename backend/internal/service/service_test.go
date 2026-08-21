@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/domain"
+	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/events"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/executor"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/store"
 )
@@ -59,7 +60,7 @@ func TestGetApplianceStateReturnsStateForEachSwitchCode(t *testing.T) {
 		"device-1::switch_1": {Online: true, SwitchCode: "switch_1", Value: &on},
 		"device-1::switch_2": {Online: true, SwitchCode: "switch_2", Value: &off},
 	}}
-	appService := New(repository, executor.NewRegistry(provider), 0)
+	appService := New(repository, executor.NewRegistry(provider), 0, events.NewLogHub())
 
 	state, err := appService.GetApplianceState(context.Background(), "appliance-1")
 	if err != nil {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/domain"
+	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/events"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/executor"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/service"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/store"
@@ -38,10 +40,11 @@ func TestDetectionEndpointExecutesBoundTuyaActionOnce(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("CreateBinding() error = %v", err)
 	}
+	logHub := events.NewLogHub()
 	recorder := &recordingExecutor{}
 	registry := executor.NewRegistry(recorder)
-	appService := service.New(repository, registry, 5*time.Second)
-	server := New(repository, appService, slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"http://localhost:5173"})
+	appService := service.New(repository, registry, 5*time.Second, logHub)
+	server := New(repository, appService, slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"http://localhost:5173"}, logHub)
 	payload := `{"event_id":"event-http-1","camera_id":"demo-camera-1","motion_code":"POSE_RIGHT_HAND_UP","confidence":0.93,"detected_at":"2026-08-05T12:00:00Z"}`
 
 	first := performRequest(server, http.MethodPost, "/internal/detections", payload)
@@ -73,7 +76,8 @@ func TestDetectionEndpointRejectsMotionWithoutBinding(t *testing.T) {
 	repository := store.NewMemory(store.DefaultSeed(time.Now()))
 	recorder := &recordingExecutor{}
 	registry := executor.NewRegistry(recorder)
-	server := New(repository, service.New(repository, registry, 5*time.Second), slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"*"})
+	logHub := events.NewLogHub()
+	server := New(repository, service.New(repository, registry, 5*time.Second, logHub), slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"*"}, logHub)
 	payload := `{"event_id":"event-http-unbound","camera_id":"demo-camera-1","motion_code":"POSE_RIGHT_HAND_UP","confidence":0.93,"detected_at":"2026-08-05T12:00:00Z"}`
 
 	response := performRequest(server, http.MethodPost, "/internal/detections", payload)
@@ -90,7 +94,8 @@ func TestDetectionEndpointRejectsMotionWithoutBinding(t *testing.T) {
 func TestDetectionEndpointRejectsUnknownFields(t *testing.T) {
 	repository := store.NewMemory(store.DefaultSeed(time.Now()))
 	registry := executor.NewRegistry(&recordingExecutor{})
-	server := New(repository, service.New(repository, registry, 0), slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"*"})
+	logHub := events.NewLogHub()
+	server := New(repository, service.New(repository, registry, 0, logHub), slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"*"}, logHub)
 	payload := `{"event_id":"event-http-2","camera_id":"demo-camera-1","motion_code":"POSE_RIGHT_HAND_UP","confidence":0.93,"detected_at":"2026-08-05T12:00:00Z","unexpected":true}`
 
 	response := performRequest(server, http.MethodPost, "/internal/detections", payload)
@@ -102,12 +107,140 @@ func TestDetectionEndpointRejectsUnknownFields(t *testing.T) {
 func TestFrontendListResponsesUseExpectedEnvelope(t *testing.T) {
 	repository := store.NewMemory(store.DefaultSeed(time.Now()))
 	registry := executor.NewRegistry(&recordingExecutor{})
-	server := New(repository, service.New(repository, registry, 0), slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"*"})
+	logHub := events.NewLogHub()
+	server := New(repository, service.New(repository, registry, 0, logHub), slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"*"}, logHub)
 
 	for _, pathAndKey := range [][2]string{{"/api/cameras", "cameras"}, {"/api/motions", "motions"}, {"/api/appliances", "appliances"}, {"/api/actions", "actions"}, {"/api/bindings", "bindings"}, {"/api/logs", "logs"}} {
 		response := performRequest(server, http.MethodGet, pathAndKey[0], "")
 		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"`+pathAndKey[1]+`":`) {
 			t.Errorf("GET %s = %d %s", pathAndKey[0], response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestLogStreamSendsPersistedLogs(t *testing.T) {
+	repository := store.NewMemory(store.DefaultSeed(time.Now()))
+	if _, err := repository.CreateBinding(context.Background(), domain.CreateBindingInput{
+		MotionID: "motion-pose-right-hand-up", ActionID: "action-plug-a-on",
+	}); err != nil {
+		t.Fatalf("CreateBinding() error = %v", err)
+	}
+
+	logHub := events.NewLogHub()
+	server := New(
+		repository,
+		service.New(repository, executor.NewRegistry(&recordingExecutor{}), 0, logHub),
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		[]string{"*"},
+		logHub,
+	)
+	httpServer := httptest.NewServer(server)
+	defer httpServer.Close()
+
+	response, err := http.Get(httpServer.URL + "/api/logs/stream")
+	if err != nil {
+		t.Fatalf("GET /api/logs/stream error = %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("stream status = %d, want 200", response.StatusCode)
+	}
+
+	reader := bufio.NewReader(response.Body)
+	event, _, err := readSSEEvent(reader)
+	if err != nil {
+		t.Fatalf("read connected event: %v", err)
+	}
+	if event != "connected" {
+		t.Fatalf("first event = %q, want connected", event)
+	}
+
+	detection := performRequest(server, http.MethodPost, "/internal/detections", `{"event_id":"event-stream-1","camera_id":"demo-camera-1","motion_code":"POSE_RIGHT_HAND_UP","confidence":0.93,"detected_at":"2026-08-05T12:00:00Z"}`)
+	if detection.Code != http.StatusOK {
+		t.Fatalf("detection status = %d, body = %s", detection.Code, detection.Body.String())
+	}
+
+	event, data, err := readSSEEvent(reader)
+	if err != nil {
+		t.Fatalf("read log event: %v", err)
+	}
+	if event != "log" {
+		t.Fatalf("log event = %q, want log", event)
+	}
+	var log domain.ActionLog
+	if err := json.Unmarshal([]byte(data), &log); err != nil {
+		t.Fatalf("decode log event: %v", err)
+	}
+	if log.ID == "" || log.Status != domain.LogSuccess {
+		t.Fatalf("log event = %+v, want persisted successful log", log)
+	}
+}
+
+func TestLogStreamClosesWhenLogHubCloses(t *testing.T) {
+	repository := store.NewMemory(store.DefaultSeed(time.Now()))
+	logHub := events.NewLogHub()
+	server := New(
+		repository,
+		service.New(repository, executor.NewRegistry(&recordingExecutor{}), 0, logHub),
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		[]string{"*"},
+		logHub,
+	)
+	httpServer := httptest.NewServer(server)
+	defer httpServer.Close()
+
+	response, err := http.Get(httpServer.URL + "/api/logs/stream")
+	if err != nil {
+		t.Fatalf("GET /api/logs/stream error = %v", err)
+	}
+	defer response.Body.Close()
+
+	reader := bufio.NewReader(response.Body)
+	event, _, err := readSSEEvent(reader)
+	if err != nil {
+		t.Fatalf("read connected event: %v", err)
+	}
+	if event != "connected" {
+		t.Fatalf("first event = %q, want connected", event)
+	}
+
+	logHub.Close()
+	readDone := make(chan error, 1)
+	go func() {
+		_, err := reader.ReadString('\n')
+		readDone <- err
+	}()
+
+	select {
+	case err := <-readDone:
+		if err == nil {
+			t.Fatal("SSE stream remained open after log hub close")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("SSE stream did not close after log hub close")
+	}
+}
+
+func readSSEEvent(reader *bufio.Reader) (string, string, error) {
+	var event string
+	var data string
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return "", "", err
+		}
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			if event != "" {
+				return event, data, nil
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "event: ") {
+			event = strings.TrimPrefix(line, "event: ")
+		}
+		if strings.HasPrefix(line, "data: ") {
+			data = strings.TrimPrefix(line, "data: ")
 		}
 	}
 }
@@ -120,7 +253,8 @@ func TestDeleteBindingEndpointRemovesBinding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateBinding() error = %v", err)
 	}
-	server := New(repository, service.New(repository, executor.NewRegistry(&recordingExecutor{}), 0), slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"*"})
+	logHub := events.NewLogHub()
+	server := New(repository, service.New(repository, executor.NewRegistry(&recordingExecutor{}), 0, logHub), slog.New(slog.NewTextHandler(io.Discard, nil)), []string{"*"}, logHub)
 
 	response := performRequest(server, http.MethodDelete, "/api/bindings/"+binding.ID, "")
 	if response.Code != http.StatusNoContent || response.Body.Len() != 0 {

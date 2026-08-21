@@ -8,14 +8,19 @@ import type {
   Appliance,
   BackendSnapshot,
   Camera,
+  ConfirmIRLearnRequest,
+  CreateActionRequest,
+  CreateApplianceRequest,
   CreateBindingRequest,
   ExecuteActionResponse,
+  IRControllerHealth,
+  IRLearningSession,
   Motion,
   MotionBinding,
 } from "~/types/backendApi";
 
 const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080"
+  import.meta.env?.VITE_API_BASE_URL ?? "http://localhost:8080"
 ).replace(/\/$/, "");
 
 interface ApiErrorBody {
@@ -41,6 +46,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // Keep the HTTP status when the response is not JSON.
     }
     throw new Error(message);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return (await response.json()) as T;
@@ -71,6 +80,28 @@ export async function getSnapshot(): Promise<BackendSnapshot> {
   };
 }
 
+export function createAppliance(
+  input: CreateApplianceRequest,
+): Promise<Appliance> {
+  return request<Appliance>("/api/appliances", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function createAction(input: CreateActionRequest): Promise<Action> {
+  return request<Action>("/api/actions", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteAction(actionId: string): Promise<void> {
+  return request<void>(`/api/actions/${encodeURIComponent(actionId)}`, {
+    method: "DELETE",
+  });
+}
+
 export function saveBinding(
   input: CreateBindingRequest,
 ): Promise<MotionBinding> {
@@ -80,10 +111,81 @@ export function saveBinding(
   });
 }
 
+export function deleteBinding(bindingId: string): Promise<void> {
+  return request<void>(`/api/bindings/${encodeURIComponent(bindingId)}`, {
+    method: "DELETE",
+  });
+}
+
 export function executeAction(
   actionId: string,
 ): Promise<ExecuteActionResponse> {
   return request<ExecuteActionResponse>(`/api/actions/${actionId}/execute`, {
     method: "POST",
   });
+}
+
+export function getIRHealth(
+  applianceId: string,
+): Promise<IRControllerHealth> {
+  return request<IRControllerHealth>(
+    `/api/appliances/${encodeURIComponent(applianceId)}/ir/health`,
+  );
+}
+
+export function startIRLearning(
+  applianceId: string,
+  timeoutSeconds?: number,
+): Promise<IRLearningSession> {
+  return request<IRLearningSession>(
+    `/api/appliances/${encodeURIComponent(applianceId)}/ir/learn/start`,
+    {
+      method: "POST",
+      body: JSON.stringify({ timeoutSeconds }),
+    },
+  );
+}
+
+export function getIRLearningStatus(
+  applianceId: string,
+): Promise<IRLearningSession> {
+  return request<IRLearningSession>(
+    `/api/appliances/${encodeURIComponent(applianceId)}/ir/learn/status`,
+  );
+}
+
+export function confirmIRLearning(
+  applianceId: string,
+  input: ConfirmIRLearnRequest,
+): Promise<Action> {
+  return request<Action>(
+    `/api/appliances/${encodeURIComponent(applianceId)}/ir/learn/confirm`,
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function stopIRLearning(
+  applianceId: string,
+  sessionId: string,
+): Promise<{ ok: boolean; state: string }> {
+  return request<{ ok: boolean; state: string }>(
+    `/api/appliances/${encodeURIComponent(applianceId)}/ir/learn/stop`,
+    {
+      method: "POST",
+      body: JSON.stringify({ sessionId }),
+    },
+  );
+}
+
+export function testIR(applianceId: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(
+    `/api/appliances/${encodeURIComponent(applianceId)}/ir/test`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
 }

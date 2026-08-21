@@ -11,7 +11,7 @@ import {
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { useBindings, useCreateBinding } from "~/hooks/useBindings";
+import { useBindings, useCreateBinding, useDeleteBinding } from "~/hooks/useBindings";
 import { useMotions } from "~/hooks/useMotions";
 import { useActions } from "~/hooks/useActions";
 import { useAppliances } from "~/hooks/useAppliances";
@@ -42,6 +42,7 @@ export function DeviceBindingPanel({
   loading,
 }: DeviceBindingPanelProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  const deleteMutation = useDeleteBinding();
 
   const bindingRows: BindingRow[] = bindings.map((b) => ({
     key: b.id,
@@ -89,14 +90,23 @@ export function DeviceBindingPanel({
       title: "Del",
       key: "del",
       width: 80,
-      render: () => (
+      render: (_: unknown, row: BindingRow) => (
         <Popconfirm
           title="この紐付けを削除しますか？"
-          onConfirm={() =>
-            message.warning("バインディング削除はバックエンド未対応です")
-          }
+          onConfirm={async () => {
+            try {
+              await deleteMutation.mutateAsync(row.binding.id);
+              message.success("バインディングを削除しました");
+            } catch (error) {
+              message.error(
+                error instanceof Error
+                  ? error.message
+                  : "バインディングの削除に失敗しました",
+              );
+            }
+          }}
         >
-          <Button danger size="small">
+          <Button danger size="small" loading={deleteMutation.isPending}>
             削除
           </Button>
         </Popconfirm>

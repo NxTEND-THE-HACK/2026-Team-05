@@ -12,6 +12,7 @@ import (
 
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/api"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/config"
+	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/events"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/executor"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/service"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/store"
@@ -50,13 +51,22 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	registry := executor.NewRegistry(tuyaExecutor)
-	appService := service.New(repository, registry, cfg.Cooldown)
-	e := api.New(repository, appService, logger, cfg.AllowedOrigins)
+	irExecutor := executor.NewIR(cfg.IR, logger)
+	registry := executor.NewRegistry(tuyaExecutor, irExecutor)
+	logHub := events.NewLogHub()
+	defer logHub.Close()
+	appService := service.New(repository, registry, cfg.Cooldown, logHub)
+	e := api.New(repository, appService, logger, cfg.AllowedOrigins, logHub)
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("HTTP server started", "port", cfg.Port, "tuya_dry_run", cfg.Tuya.DryRun)
+		logger.Info(
+			"HTTP server started",
+			"port", cfg.Port,
+			"tuya_dry_run", cfg.Tuya.DryRun,
+			"ir_controller_id", cfg.IR.ControllerID,
+			"ir_configured", irExecutor.Configured(),
+		)
 		if err := e.Start(":" + cfg.Port); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
@@ -68,6 +78,7 @@ func run(logger *slog.Logger) error {
 	case err := <-errCh:
 		return err
 	case <-signals:
+		logHub.Close()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
 		return e.Shutdown(shutdownCtx)
