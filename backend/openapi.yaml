@@ -93,6 +93,20 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Action" }
+  /api/actions/{id}:
+    delete:
+      summary: Delete a registered appliance action
+      description: Deleting an action also removes motion bindings that reference it.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Action deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/actions/{id}/execute:
     post:
       parameters:

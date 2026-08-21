@@ -329,6 +329,7 @@ front/app/
 | GET | `/api/appliances` | Devices, Sidebar, Detail |
 | POST | `/api/appliances` | Devices 登録 |
 | GET | `/api/actions` | フォーム, Manual Control, join |
+| DELETE | `/api/actions/:id` | 登録済み赤外線ボタン削除 |
 | POST | `/api/actions/:id/execute` | Manual Control |
 | GET | `/api/appliances/:id/ir/health` | 赤外線コントローラー状態 |
 | POST | `/api/appliances/:id/ir/learn/start` | 赤外線学習開始 |

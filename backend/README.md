@@ -134,6 +134,7 @@ GO_API_URL=http://127.0.0.1:8080/internal/detections
 | `GET` | `/api/motions` | モーション一覧 |
 | `GET` / `POST` | `/api/appliances` | 家電一覧・追加 |
 | `GET` / `POST` | `/api/actions` | アクション一覧・追加 |
+| `DELETE` | `/api/actions/:id` | 登録済みアクション削除（関連する紐付けも削除） |
 | `POST` | `/api/actions/:id/execute` | 手動実行 |
 | `GET` | `/api/appliances/:id/ir/health` | 赤外線コントローラー状態 |
 | `POST` | `/api/appliances/:id/ir/learn/start` | one-shot学習開始 |

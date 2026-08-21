@@ -322,7 +322,9 @@ Content-Type: application/json
 
 ブラウザ終了などでstopを呼べない場合も、ESP32とバックエンド側のタイムアウトで学習状態は解除される。
 
-## 7. 登録済みボタンの実行
+## 7. 登録済みボタンの操作
+
+### 7.1 実行
 
 既存APIをそのまま使用する。
 
@@ -339,6 +341,20 @@ POST /api/actions/{actionId}/execute
 学習中は送信できず `409 Conflict` になる。競合した操作も操作ログへFAILEDとして保存される。Manual Controlでは学習中のすべての赤外線ボタンをdisabledにする。
 
 赤外線Actionは既存のモーションバインディングでも選択できる。認識イベントから実行された場合も同じExecutorと操作ログを使用する。
+
+### 7.2 削除
+
+```http
+DELETE /api/actions/{actionId}
+```
+
+成功時は `204 No Content`。削除したActionを使用しているモーションバインディングも同時に削除される。フロントは実行前に確認ダイアログを表示し、成功後に次のクエリをinvalidateする。
+
+- 対象家電のactions
+- 全actions
+- bindings
+
+存在しないActionは `404 Not Found`。操作ログは履歴として残る。
 
 ## 8. 赤外線LEDテスト
 
@@ -383,4 +399,5 @@ POST /api/appliances/{applianceId}/ir/test
 - Modalキャンセル時にstop APIが呼ばれる
 - 保存後にページ再読込しても登録済みボタンが残る
 - 登録済みボタンを手動実行・モーションへバインドできる
+- 登録済みボタンを確認ダイアログ経由で削除でき、関連するモーション紐付けも一覧から消える
 - 赤外線の実状態をON/OFFとして誤表示しない

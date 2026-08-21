@@ -191,6 +191,23 @@ func (m *Memory) CreateBinding(_ context.Context, input domain.CreateBindingInpu
 	return item, nil
 }
 
+func (m *Memory) DeleteAction(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.actions[id]; !ok {
+		return ErrNotFound
+	}
+	delete(m.actions, id)
+	for bindingID, binding := range m.bindings {
+		if binding.ActionID != id {
+			continue
+		}
+		delete(m.bindings, bindingID)
+		delete(m.lastExecuted, bindingID)
+	}
+	return nil
+}
+
 func (m *Memory) DeleteBinding(_ context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

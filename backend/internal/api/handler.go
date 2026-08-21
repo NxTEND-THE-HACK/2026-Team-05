@@ -53,6 +53,7 @@ func New(repository store.Store, appService *service.Service, logger *slog.Logge
 	api.GET("/appliances/:id/state", h.applianceState)
 	api.GET("/actions", h.actions)
 	api.POST("/actions", h.createAction)
+	api.DELETE("/actions/:id", h.deleteAction)
 	api.POST("/actions/:id/execute", h.executeAction)
 	api.GET("/appliances/:id/ir/health", h.irHealth)
 	api.POST("/appliances/:id/ir/learn/start", h.startIRLearning)
@@ -196,6 +197,17 @@ func (h *Handler) createAction(c echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusCreated, item)
+}
+
+func (h *Handler) deleteAction(c echo.Context) error {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "id is required")
+	}
+	if err := h.store.DeleteAction(c.Request().Context(), id); err != nil {
+		return err
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (h *Handler) executeAction(c echo.Context) error {

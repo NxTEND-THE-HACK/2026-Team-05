@@ -96,6 +96,12 @@ export function createAction(input: CreateActionRequest): Promise<Action> {
   });
 }
 
+export function deleteAction(actionId: string): Promise<void> {
+  return request<void>(`/api/actions/${encodeURIComponent(actionId)}`, {
+    method: "DELETE",
+  });
+}
+
 export function saveBinding(
   input: CreateBindingRequest,
 ): Promise<MotionBinding> {

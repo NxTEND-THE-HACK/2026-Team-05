@@ -142,6 +142,7 @@ http://localhost:5173
 | `POST` | `/api/appliances` | 家電作成 | フロント |
 | `GET` | `/api/actions` | 家電アクション一覧 | フロント |
 | `POST` | `/api/actions` | 家電アクション作成 | フロント |
+| `DELETE` | `/api/actions/:id` | 登録済み家電アクション削除 | フロント |
 | `POST` | `/api/actions/:id/execute` | 家電アクション手動実行 | フロント |
 | `GET` | `/api/appliances/:id/ir/health` | 赤外線コントローラー状態 | フロント |
 | `POST` | `/api/appliances/:id/ir/learn/start` | 赤外線one-shot学習開始 | フロント |
@@ -418,7 +419,22 @@ Tuya操作失敗時もHTTPレスポンスは `200 OK` で、次の形式にな�
 
 実行結果は操作ログへ保存される。
 
-### 5.8 モーション紐付け一覧取得
+### 5.8 家電アクション削除
+
+```http
+DELETE /api/actions/{actionId}
+```
+
+指定した登録済みアクションを削除する。赤外線学習で登録したボタンも通常のActionなので、このAPIを使用する。
+
+レスポンス `204 No Content`:
+
+- 対象が存在する場合はボディなしで返す
+- 対象を使用していたモーション紐付けも同時に削除する
+- 操作ログは履歴として保持する
+- 対象が存在しない場合は `404 Not Found` を返す
+
+### 5.9 モーション紐付け一覧取得
 
 ```http
 GET /api/bindings
@@ -441,7 +457,7 @@ GET /api/bindings
 }
 ```
 
-### 5.9 モーション紐付け作成・更新
+### 5.10 モーション紐付け作成・更新
 
 ```http
 POST /api/bindings
@@ -481,7 +497,7 @@ Content-Type: application/json
 - 更新の場合もHTTPステータスは `201 Created`
 - 更新時はクールダウン状態をリセット
 
-### 5.10 モーション紐付け削除
+### 5.11 モーション紐付け削除
 
 ```http
 DELETE /api/bindings/{id}
@@ -494,7 +510,7 @@ DELETE /api/bindings/{id}
 - 対象が存在する場合はボディなしで返す
 - 対象が存在しない場合は `404 Not Found` を返す
 
-### 5.11 操作ログ一覧取得
+### 5.12 操作ログ一覧取得
 
 ```http
 GET /api/logs
@@ -542,7 +558,7 @@ GET /api/logs?limit=100
 
 紐付け解決前に失敗したログでは `actionId` と `actionName` が存在しない。
 
-### 5.12 操作ログのリアルタイム通知
+### 5.13 操作ログのリアルタイム通知
 
 ```http
 GET /api/logs/stream

@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -102,5 +103,26 @@ func TestIRLearningAPIRegistersAndExecutesAction(t *testing.T) {
 	busy := performRequest(server, http.MethodPost, "/api/actions/"+action.ID+"/execute", "")
 	if busy.Code != http.StatusConflict || irProvider.executeCalls != 2 {
 		t.Fatalf("busy execute = %d %s, calls=%d", busy.Code, busy.Body.String(), irProvider.executeCalls)
+	}
+
+	bound := performRequest(server, http.MethodPost, "/api/bindings", fmt.Sprintf(`{"motionId":"motion-pose-right-hand-up","actionId":%q}`, action.ID))
+	if bound.Code != http.StatusCreated {
+		t.Fatalf("create binding = %d %s", bound.Code, bound.Body.String())
+	}
+	deleted := performRequest(server, http.MethodDelete, "/api/actions/"+action.ID, "")
+	if deleted.Code != http.StatusNoContent || deleted.Body.Len() != 0 {
+		t.Fatalf("delete action = %d %q, want 204 with empty body", deleted.Code, deleted.Body.String())
+	}
+	actions := performRequest(server, http.MethodGet, "/api/actions?applianceId="+appliance.ID, "")
+	if actions.Code != http.StatusOK || strings.Contains(actions.Body.String(), action.ID) {
+		t.Fatalf("actions after delete = %d %s", actions.Code, actions.Body.String())
+	}
+	bindings := performRequest(server, http.MethodGet, "/api/bindings", "")
+	if bindings.Code != http.StatusOK || strings.Contains(bindings.Body.String(), action.ID) {
+		t.Fatalf("bindings after action delete = %d %s", bindings.Code, bindings.Body.String())
+	}
+	missing := performRequest(server, http.MethodDelete, "/api/actions/"+action.ID, "")
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("delete missing action = %d %s, want 404", missing.Code, missing.Body.String())
 	}
 }
