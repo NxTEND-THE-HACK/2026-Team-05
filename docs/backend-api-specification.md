@@ -3,9 +3,9 @@
 | 項目 | 内容 |
 |---|---|
 | 対象 | フロントエンド・Python認識サービス開発者 |
-| APIバージョン | v0.1.0 |
-| 最終更新日 | 2026-08-05 |
-| 実装ブランチ | `codex/feature/backend-tuya` |
+| APIバージョン | v0.2.0 |
+| 最終更新日 | 2026-08-21 |
+| 実装ブランチ | `codex/feature/esp32-ir-learning-backend` |
 | OpenAPI | `backend/openapi.yaml` |
 
 ## 1. 概要
@@ -14,6 +14,11 @@
 
 - `/api/*`: フロントエンドが家電、アクション、モーションとの紐付け、操作ログを管理するREST API
 - `/internal/*`: Python認識サービスからモーション認識結果を受け取る内部API
+
+ESP32赤外線連携の詳細は、利用者別の次の文書を正とする。
+
+- フロント担当者: `docs/frontend-ir-api-specification.md`
+- マイコン担当者: `docs/esp32-ir-http-contract.md`
 
 現在の紐付けモデルは次のとおり。
 
@@ -29,10 +34,19 @@ Appliance（例: スマートプラグA）
 
 ## 2. フロントエンド側で必要な型変更
 
-現在の `front/app/types/api.ts` は旧仕様のため、API接続時に次の変更が必要になる。
+`front/app/types/backendApi.ts` へ次の型変更が必要になる。
 
 ```ts
-export type ActionProviderType = "TUYA";
+export type ActionProviderType = "TUYA" | "ESP32_IR";
+
+export interface Appliance {
+  id: string;
+  name: string;
+  category: string;
+  controlProvider: ActionProviderType;
+  controllerId?: string;
+  createdAt: string;
+}
 
 export interface MotionBinding {
   id: string;
@@ -52,7 +66,8 @@ export interface CreateBindingRequest {
 
 変更点:
 
-- `ActionProviderType` は現在 `TUYA` のみ対応
+- `ActionProviderType` は `TUYA` と `ESP32_IR` に対応
+- Manual Controlは `Appliance.controlProvider` でTuya UIと赤外線UIを分岐する
 - `MotionBinding.cameraId` は将来利用のためoptionalで保持
 - `CreateBindingRequest.cameraId` もoptional
 - 現在のアクション検索では `cameraId` を使用しない
@@ -111,7 +126,9 @@ http://localhost:5173
 | `413` | リクエストボディが1 MBを超えた |
 | `415` | `Content-Type` が `application/json` ではない |
 | `500` | バックエンド内部エラー |
-| `503` | DBなどの保存先が利用できない |
+| `502` | ESP32から不正応答または上流エラー |
+| `503` | DBまたはESP32設定が利用できない |
+| `504` | ESP32通信タイムアウト |
 
 ## 4. API一覧
 
@@ -126,6 +143,12 @@ http://localhost:5173
 | `GET` | `/api/actions` | 家電アクション一覧 | フロント |
 | `POST` | `/api/actions` | 家電アクション作成 | フロント |
 | `POST` | `/api/actions/:id/execute` | 家電アクション手動実行 | フロント |
+| `GET` | `/api/appliances/:id/ir/health` | 赤外線コントローラー状態 | フロント |
+| `POST` | `/api/appliances/:id/ir/learn/start` | 赤外線one-shot学習開始 | フロント |
+| `GET` | `/api/appliances/:id/ir/learn/status` | 学習状態・受信結果 | フロント |
+| `POST` | `/api/appliances/:id/ir/learn/confirm` | 受信結果をActionとして保存 | フロント |
+| `POST` | `/api/appliances/:id/ir/learn/stop` | 学習中止 | フロント |
+| `POST` | `/api/appliances/:id/ir/test` | 赤外線LEDテスト | フロント |
 | `GET` | `/api/bindings` | モーション紐付け一覧 | フロント |
 | `POST` | `/api/bindings` | モーション紐付け作成・更新 | フロント |
 | `DELETE` | `/api/bindings/:id` | モーション紐付け削除 | フロント |
@@ -245,6 +268,7 @@ GET /api/appliances
       "id": "appliance-plug-a",
       "name": "スマートプラグA",
       "category": "スマートプラグ",
+      "controlProvider": "TUYA",
       "createdAt": "2026-08-05T03:00:00Z"
     }
   ]
@@ -263,7 +287,8 @@ Content-Type: application/json
 ```json
 {
   "name": "リビング照明",
-  "category": "照明"
+  "category": "照明",
+  "controlProvider": "ESP32_IR"
 }
 ```
 
@@ -274,11 +299,13 @@ Content-Type: application/json
   "id": "appliance-xxxxxxxx-xxxx-4xxx-xxxx-xxxxxxxxxxxx",
   "name": "リビング照明",
   "category": "照明",
+  "controlProvider": "ESP32_IR",
+  "controllerId": "main-ir",
   "createdAt": "2026-08-05T03:00:00Z"
 }
 ```
 
-`name` と `category` は必須。
+`name` と `category` は必須。`controlProvider` は `TUYA | ESP32_IR` で、省略時は後方互換のため `TUYA`。`ESP32_IR` で `controllerId` を省略した場合はバックエンド既定値を使用する。
 
 ### 5.5 家電アクション一覧取得
 
@@ -665,5 +692,7 @@ GET /healthz
 - `DATABASE_URL` が未設定の場合、データはインメモリ保存となり、バックエンド再起動時に作成データ・紐付け・ログが消える
 - PostgreSQL利用時はデータが永続化される
 - `TUYA_DRY_RUN=true` の場合、APIは成功するが実機操作は行わない
+- 赤外線学習セッションはバックエンドメモリに保持されるため、学習中に再起動した場合は再度学習開始が必要
+- 赤外線信号そのものはAction JSONとしてDBへ保存され、PostgreSQL利用時は再起動後も残る
 - 実機操作ではTuya Device IDと電源DPコードが正しい必要がある
 - 現在の初期データにはプラグA〜Cのオン・オフアクションがあるが、モーションとの初期紐付けはない

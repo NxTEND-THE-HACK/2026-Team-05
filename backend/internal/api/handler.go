@@ -14,6 +14,7 @@ import (
 
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/domain"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/events"
+	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/executor"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/service"
 	"github.com/NxTEND-THE-HACK/2026-Team-05/backend/internal/store"
 	"github.com/labstack/echo/v4"
@@ -53,6 +54,12 @@ func New(repository store.Store, appService *service.Service, logger *slog.Logge
 	api.GET("/actions", h.actions)
 	api.POST("/actions", h.createAction)
 	api.POST("/actions/:id/execute", h.executeAction)
+	api.GET("/appliances/:id/ir/health", h.irHealth)
+	api.POST("/appliances/:id/ir/learn/start", h.startIRLearning)
+	api.GET("/appliances/:id/ir/learn/status", h.irLearningStatus)
+	api.POST("/appliances/:id/ir/learn/confirm", h.confirmIRLearning)
+	api.POST("/appliances/:id/ir/learn/stop", h.stopIRLearning)
+	api.POST("/appliances/:id/ir/test", h.testIR)
 	api.GET("/bindings", h.bindings)
 	api.POST("/bindings", h.createBinding)
 	api.DELETE("/bindings/:id", h.deleteBinding)
@@ -137,8 +144,27 @@ func (h *Handler) createAppliance(c echo.Context) error {
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Category = strings.TrimSpace(input.Category)
+	input.ControllerID = strings.TrimSpace(input.ControllerID)
 	if input.Name == "" || input.Category == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "name and category are required")
+	}
+	if input.ControlProvider == "" {
+		input.ControlProvider = domain.ProviderTuya
+	}
+	switch input.ControlProvider {
+	case domain.ProviderTuya:
+		if input.ControllerID != "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "controllerId is only valid for ESP32_IR appliances")
+		}
+	case domain.ProviderESP32IR:
+		defaultControllerID := h.service.DefaultIRControllerID()
+		if input.ControllerID == "" {
+			input.ControllerID = defaultControllerID
+		} else if input.ControllerID != defaultControllerID {
+			return echo.NewHTTPError(http.StatusBadRequest, "controllerId does not match the configured infrared controller")
+		}
+	default:
+		return echo.NewHTTPError(http.StatusBadRequest, "controlProvider must be TUYA or ESP32_IR")
 	}
 	item, err := h.store.CreateAppliance(c.Request().Context(), input)
 	if err != nil {
@@ -180,6 +206,80 @@ func (h *Handler) executeAction(c echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusOK, result)
+}
+
+func (h *Handler) irHealth(c echo.Context) error {
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
+	defer cancel()
+	health, err := h.service.IRHealth(ctx, strings.TrimSpace(c.Param("id")))
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, health)
+}
+
+func (h *Handler) startIRLearning(c echo.Context) error {
+	var input struct {
+		TimeoutSeconds int `json:"timeoutSeconds"`
+	}
+	if err := bindStrict(c, &input); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
+	defer cancel()
+	session, err := h.service.StartIRLearning(ctx, strings.TrimSpace(c.Param("id")), time.Duration(input.TimeoutSeconds)*time.Second)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, session)
+}
+
+func (h *Handler) irLearningStatus(c echo.Context) error {
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
+	defer cancel()
+	session, err := h.service.IRLearningStatus(ctx, strings.TrimSpace(c.Param("id")))
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, session)
+}
+
+func (h *Handler) confirmIRLearning(c echo.Context) error {
+	var input service.ConfirmIRLearningInput
+	if err := bindStrict(c, &input); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
+	defer cancel()
+	action, err := h.service.ConfirmIRLearning(ctx, strings.TrimSpace(c.Param("id")), input)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusCreated, action)
+}
+
+func (h *Handler) stopIRLearning(c echo.Context) error {
+	var input struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := bindStrict(c, &input); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
+	defer cancel()
+	if err := h.service.StopIRLearning(ctx, strings.TrimSpace(c.Param("id")), input.SessionID); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string]any{"ok": true, "state": "idle"})
+}
+
+func (h *Handler) testIR(c echo.Context) error {
+	ctx, cancel := context.WithTimeout(c.Request().Context(), 5*time.Second)
+	defer cancel()
+	if err := h.service.TestIR(ctx, strings.TrimSpace(c.Param("id"))); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (h *Handler) bindings(c echo.Context) error {
@@ -308,9 +408,40 @@ func (h *Handler) errorHandler(err error, c echo.Context) {
 	} else if errors.Is(err, store.ErrConflict) {
 		status = http.StatusConflict
 		message = "resource already exists"
-	} else if errors.Is(err, service.ErrInvalidAction) {
+	} else if errors.Is(err, service.ErrIRLearningTimeout) {
+		status = http.StatusRequestTimeout
+		message = err.Error()
+	} else if errors.Is(err, service.ErrIRLearningNotFound) {
+		status = http.StatusNotFound
+		message = err.Error()
+	} else if errors.Is(err, service.ErrIRLearningConflict) || errors.Is(err, service.ErrIRLearningNotCaptured) || errors.Is(err, service.ErrDuplicateAction) || errors.Is(err, executor.ErrIRBusy) {
+		status = http.StatusConflict
+		message = err.Error()
+	} else if errors.Is(err, executor.ErrIRNotConfigured) {
+		status = http.StatusServiceUnavailable
+		message = err.Error()
+	} else if errors.Is(err, service.ErrInvalidAction) || errors.Is(err, service.ErrInvalidAppliance) {
 		status = http.StatusBadRequest
 		message = err.Error()
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		status = http.StatusGatewayTimeout
+		message = "upstream request timed out"
+	} else if errors.Is(err, executor.ErrIRUnavailable) {
+		status = http.StatusBadGateway
+		message = err.Error()
+	} else {
+		var controllerErr *executor.IRControllerError
+		if errors.As(err, &controllerErr) {
+			switch controllerErr.StatusCode {
+			case http.StatusRequestTimeout:
+				status = http.StatusRequestTimeout
+			case http.StatusConflict:
+				status = http.StatusConflict
+			default:
+				status = http.StatusBadGateway
+			}
+			message = controllerErr.Error()
+		}
 	}
 	if status >= 500 {
 		h.logger.Error("request failed", "request_id", c.Response().Header().Get(echo.HeaderXRequestID), "method", c.Request().Method, "path", c.Path(), "error", err)

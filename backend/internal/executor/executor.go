@@ -20,10 +20,15 @@ type StateFetcher interface {
 
 type Registry struct {
 	tuya ActionExecutor
+	ir   IRProvider
 }
 
-func NewRegistry(tuya ActionExecutor) *Registry {
-	return &Registry{tuya: tuya}
+func NewRegistry(tuya ActionExecutor, infrared ...IRProvider) *Registry {
+	registry := &Registry{tuya: tuya}
+	if len(infrared) > 0 {
+		registry.ir = infrared[0]
+	}
+	return registry
 }
 
 func (r *Registry) Execute(ctx context.Context, action domain.Action) error {
@@ -80,7 +85,19 @@ func (r *Registry) forProvider(provider domain.ProviderType) (ActionExecutor, er
 	switch provider {
 	case domain.ProviderTuya:
 		return r.tuya, nil
+	case domain.ProviderESP32IR:
+		if r.ir == nil {
+			return nil, ErrIRNotConfigured
+		}
+		return r.ir, nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type: %s", provider)
 	}
+}
+
+func (r *Registry) IRProvider() (IRProvider, error) {
+	if r.ir == nil {
+		return nil, ErrIRNotConfigured
+	}
+	return r.ir, nil
 }

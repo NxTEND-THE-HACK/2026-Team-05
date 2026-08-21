@@ -122,11 +122,21 @@ func (m *Memory) ListLogs(_ context.Context, limit int) ([]domain.ActionLog, err
 }
 
 func (m *Memory) CreateAppliance(_ context.Context, input domain.CreateApplianceInput) (domain.Appliance, error) {
+	if input.ControlProvider == "" {
+		input.ControlProvider = domain.ProviderTuya
+	}
 	id, err := domain.NewID("appliance")
 	if err != nil {
 		return domain.Appliance{}, err
 	}
-	item := domain.Appliance{ID: id, Name: input.Name, Category: input.Category, CreatedAt: time.Now().UTC()}
+	item := domain.Appliance{
+		ID:              id,
+		Name:            input.Name,
+		Category:        input.Category,
+		ControlProvider: input.ControlProvider,
+		ControllerID:    input.ControllerID,
+		CreatedAt:       time.Now().UTC(),
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.appliances[item.ID] = item

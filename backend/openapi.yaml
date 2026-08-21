@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Gesture Smart Home API
-  version: 0.1.0
+  version: 0.2.0
 servers:
   - url: http://localhost:8080
 paths:
@@ -111,6 +111,135 @@ paths:
                 properties:
                   success: { type: boolean }
                   message: { type: string }
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/appliances/{id}/ir/health:
+    get:
+      summary: Get the ESP32 infrared controller status for an appliance
+      parameters:
+        - $ref: "#/components/parameters/ApplianceId"
+      responses:
+        "200":
+          description: Infrared controller status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IRHealth" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/appliances/{id}/ir/learn/start:
+    post:
+      summary: Start a one-shot infrared learning session
+      parameters:
+        - $ref: "#/components/parameters/ApplianceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                timeoutSeconds:
+                  type: integer
+                  minimum: 5
+                  maximum: 120
+                  description: Omit to use IR_LEARNING_TIMEOUT_SECONDS.
+      responses:
+        "200":
+          description: Learning started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IRLearningSession" }
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /api/appliances/{id}/ir/learn/status:
+    get:
+      summary: Poll the active infrared learning session
+      description: A normal capture is cached by the backend and the ESP32 learning mode is stopped before state=captured is returned. Repeat frames are ignored.
+      parameters:
+        - $ref: "#/components/parameters/ApplianceId"
+      responses:
+        "200":
+          description: Current learning state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IRLearningSession" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "408":
+          $ref: "#/components/responses/RequestTimeout"
+  /api/appliances/{id}/ir/learn/confirm:
+    post:
+      summary: Save the captured infrared signal as an appliance action
+      parameters:
+        - $ref: "#/components/parameters/ApplianceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfirmIRLearning" }
+      responses:
+        "201":
+          description: Learned action created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Action" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "408":
+          $ref: "#/components/responses/RequestTimeout"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/appliances/{id}/ir/learn/stop:
+    post:
+      summary: Cancel the active infrared learning session
+      parameters:
+        - $ref: "#/components/parameters/ApplianceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                sessionId: { type: string }
+      responses:
+        "200":
+          description: Learning stopped
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, state]
+                properties:
+                  ok: { type: boolean, const: true }
+                  state: { type: string, const: idle }
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/appliances/{id}/ir/test:
+    post:
+      summary: Emit a camera-visible infrared LED test signal
+      parameters:
+        - $ref: "#/components/parameters/ApplianceId"
+      responses:
+        "200":
+          description: Test signal emitted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean, const: true }
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
   /api/bindings:
     get:
       responses:
@@ -163,6 +292,12 @@ paths:
               schema:
                 type: string
 components:
+  parameters:
+    ApplianceId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
   responses:
     BadRequest:
       description: Invalid request
@@ -172,7 +307,32 @@ components:
             type: object
             properties:
               error: { type: string }
+    NotFound:
+      description: Resource or learning session not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    RequestTimeout:
+      description: Infrared learning timed out
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Infrared controller is busy, the capture is not ready, or the action name already exists
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ServiceUnavailable:
+      description: Infrared controller is not configured or is unavailable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
     DetectionEvent:
       type: object
       additionalProperties: false
@@ -203,11 +363,15 @@ components:
         description: { type: string }
     Appliance:
       type: object
-      required: [id, name, category, createdAt]
+      required: [id, name, category, controlProvider, createdAt]
       properties:
         id: { type: string }
         name: { type: string }
         category: { type: string }
+        controlProvider: { type: string, enum: [TUYA, ESP32_IR] }
+        controllerId:
+          type: string
+          description: Present for ESP32_IR appliances.
         createdAt: { type: string, format: date-time }
     CreateAppliance:
       type: object
@@ -216,6 +380,13 @@ components:
       properties:
         name: { type: string }
         category: { type: string }
+        controlProvider:
+          type: string
+          enum: [TUYA, ESP32_IR]
+          default: TUYA
+        controllerId:
+          type: string
+          description: Optional for ESP32_IR; defaults to IR_CONTROLLER_ID. Invalid for TUYA.
     Action:
       type: object
       required: [id, applianceId, name, providerType, params]
@@ -223,8 +394,11 @@ components:
         id: { type: string }
         applianceId: { type: string }
         name: { type: string }
-        providerType: { type: string, enum: [TUYA] }
-        params: { $ref: "#/components/schemas/TuyaParams" }
+        providerType: { type: string, enum: [TUYA, ESP32_IR] }
+        params:
+          oneOf:
+            - $ref: "#/components/schemas/TuyaParams"
+            - $ref: "#/components/schemas/IRParams"
     CreateAction:
       type: object
       additionalProperties: false
@@ -232,8 +406,11 @@ components:
       properties:
         applianceId: { type: string }
         name: { type: string }
-        providerType: { type: string, enum: [TUYA] }
-        params: { $ref: "#/components/schemas/TuyaParams" }
+        providerType: { type: string, enum: [TUYA, ESP32_IR] }
+        params:
+          oneOf:
+            - $ref: "#/components/schemas/TuyaParams"
+            - $ref: "#/components/schemas/IRParams"
     TuyaParams:
       type: object
       additionalProperties: false
@@ -243,6 +420,79 @@ components:
         deviceIdEnv: { type: string, enum: [PLUG_A_ID, PLUG_B_ID, PLUG_C_ID] }
         switchCode: { type: string, default: switch }
         value: { type: boolean }
+    IRSignal:
+      type: object
+      additionalProperties: false
+      required: [protocol, carrierHz]
+      anyOf:
+        - required: [code, bits]
+        - required: [raw]
+      properties:
+        protocol:
+          type: string
+          pattern: "^[A-Za-z0-9_+-]+$"
+          maxLength: 32
+        bits: { type: integer, minimum: 1, maximum: 1024 }
+        code:
+          type: string
+          pattern: "^0x[0-9A-Fa-f]+$"
+        address:
+          type: string
+          pattern: "^0x[0-9A-Fa-f]+$"
+        command:
+          type: string
+          pattern: "^0x[0-9A-Fa-f]+$"
+        raw:
+          type: array
+          maxItems: 4096
+          items: { type: integer, minimum: 1, maximum: 1000000 }
+        carrierHz: { type: integer, minimum: 30000, maximum: 60000 }
+    IRParams:
+      type: object
+      additionalProperties: false
+      required: [controllerId, signal, repeat]
+      properties:
+        controllerId: { type: string }
+        signal: { $ref: "#/components/schemas/IRSignal" }
+        repeat: { type: integer, minimum: 1, maximum: 5 }
+    IRHealth:
+      type: object
+      required: [ok, controllerId, state, wifiConnected]
+      properties:
+        ok: { type: boolean }
+        controllerId: { type: string }
+        state: { type: string, enum: [idle, learning, sending, error] }
+        wifiConnected: { type: boolean }
+        rssi: { type: integer }
+        ip: { type: string }
+        firmwareVersion: { type: string }
+        message: { type: string }
+    IRLearnCapture:
+      type: object
+      required: [captureId, isRepeat, signal]
+      properties:
+        captureId: { type: string }
+        isRepeat: { type: boolean }
+        signal: { $ref: "#/components/schemas/IRSignal" }
+    IRLearningSession:
+      type: object
+      required: [sessionId, applianceId, controllerId, state, expiresAt]
+      properties:
+        sessionId: { type: string }
+        applianceId: { type: string }
+        controllerId: { type: string }
+        state: { type: string, enum: [learning, captured] }
+        expiresAt: { type: string, format: date-time }
+        capture: { $ref: "#/components/schemas/IRLearnCapture" }
+    ConfirmIRLearning:
+      type: object
+      additionalProperties: false
+      required: [sessionId, captureId, name]
+      properties:
+        sessionId: { type: string }
+        captureId: { type: string }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        repeat: { type: integer, minimum: 1, maximum: 5, default: 1 }
     MotionBinding:
       type: object
       required: [id, motionId, actionId, isEnabled, createdAt]

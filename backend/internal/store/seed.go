@@ -45,9 +45,9 @@ func DefaultSeed(now time.Time) SeedData {
 			{ID: "motion-hand-rotate-left", Code: "MOTION_HAND_ROTATE_LEFT", Name: "左回し", Description: "左手の手のひらを基準から反時計回りに30度以上回す"},
 		},
 		Appliances: []domain.Appliance{
-			{ID: "appliance-plug-a", Name: "スマートプラグA", Category: "スマートプラグ", CreatedAt: now},
-			{ID: "appliance-plug-b", Name: "スマートプラグB", Category: "スマートプラグ", CreatedAt: now},
-			{ID: "appliance-plug-c", Name: "スマートプラグC", Category: "スマートプラグ", CreatedAt: now},
+			{ID: "appliance-plug-a", Name: "スマートプラグA", Category: "スマートプラグ", ControlProvider: domain.ProviderTuya, CreatedAt: now},
+			{ID: "appliance-plug-b", Name: "スマートプラグB", Category: "スマートプラグ", ControlProvider: domain.ProviderTuya, CreatedAt: now},
+			{ID: "appliance-plug-c", Name: "スマートプラグC", Category: "スマートプラグ", ControlProvider: domain.ProviderTuya, CreatedAt: now},
 		},
 		Actions: []domain.Action{
 			{ID: "action-plug-a-on", ApplianceID: "appliance-plug-a", Name: "プラグA オン", ProviderType: domain.ProviderTuya, Params: params("PLUG_A_ID", true)},
