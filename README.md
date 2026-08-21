@@ -52,6 +52,6 @@ Go / Node.js / Python 3.11以降の本体に加え、`dev.sh` のポート監視
 brew install go node python@3.11
 ```
 
-`recognition/.env` の `CAMERA_SOURCE` にはマイコンのIPを指定します。初期値は `http://192.168.10.106/stream` です。`CAMERA_ID` はバックエンドの初期データ `demo-camera-1` / `demo-camera-2` と合わせてください。
+メインカメラは `demo-camera-1`、IPアドレスは `192.168.10.106` です。`recognition/.env` では `CAMERA_ID=demo-camera-1` と `CAMERA_SOURCE=http://192.168.10.106/stream` をセットで指定してください。
 
 各サービスの詳細はそれぞれの README(`backend/README.md`、`front/README.md`、`recognition/README.md`、`micon/README.md`)を参照してください。

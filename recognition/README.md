@@ -21,7 +21,7 @@ started for each camera.
 
 ```text
 CAMERA_ID=demo-camera-1
-CAMERA_SOURCE=http://192.168.50.21/stream
+CAMERA_SOURCE=http://192.168.10.106/stream
 GO_API_URL=http://192.168.50.11:8080/internal/detections
 ```
 
@@ -138,7 +138,7 @@ PYTHONPATH=src python scripts/monitor_detections.py \
 
 ```bash
 CAMERA_ID=demo-camera-1 \
-CAMERA_SOURCE=http://192.168.50.21/stream \
+CAMERA_SOURCE=http://192.168.10.106/stream \
 GO_API_URL=http://192.168.50.11:8080/internal/detections \
 python -m gesture_recognition.main
 ```

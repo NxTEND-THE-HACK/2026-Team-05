@@ -32,7 +32,7 @@ Copy-Item include/config.h.example include/config.h
 固定IPをデバイス側で使う場合は、`CAMERA_USE_STATIC_IP` を `1` にし、
 `CAMERA_STATIC_IP`、`CAMERA_GATEWAY`、`CAMERA_SUBNET`、DNSを設定します。
 2台の固定IPは重複させず、ルーターのDHCP割り当て範囲外から選んでください。
-設定例では1台目を `192.168.10.105`、2台目を `192.168.10.106` にしています。
+設定例ではメインの `demo-camera-1` を `192.168.10.106` にしています。追加のカメラには別の未使用IPを割り当ててください。
 固定IP設定に失敗した場合、シリアルログにエラーを出してWi-Fi接続を再試行します。
 
 ```powershell
