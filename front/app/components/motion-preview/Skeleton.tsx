@@ -1,4 +1,5 @@
-import type { HandShape, SkeletonPose } from "./types";
+import type { SkeletonPose } from "./types";
+import type { HandPose } from "./hand";
 import { SKELETON } from "./sample";
 
 const BODY_COLOR = "#94a3b8";
@@ -9,57 +10,67 @@ const LEFT_HAND_COLOR = "#a78bfa";
 const upperArmMiddle = SKELETON.upperArmLength - SKELETON.limbRadius * 2;
 const forearmMiddle = SKELETON.forearmLength - SKELETON.limbRadius * 2;
 
-function HandMesh({ shape, color }: { shape: HandShape; color: string }) {
+const FINGER_RADIUS = 0.014;
+const FINGER_SEGMENT = 0.055;
+const FINGER_BEND = Math.PI / 2.4;
+const THUMB_BEND = Math.PI / 2.8;
+
+function Segment({ length, radius, color }: { length: number; radius: number; color: string }) {
+  return (
+    <mesh position={[0, -length / 2, 0]}>
+      <capsuleGeometry args={[radius, length - radius * 2, 4, 8]} />
+      <meshStandardMaterial color={color} />
+    </mesh>
+  );
+}
+
+function Finger({ curl, spread, color }: { curl: number; spread: number; color: string }) {
+  const bend = curl * FINGER_BEND;
+  return (
+    <group rotation={[0, 0, spread]}>
+      <Segment length={FINGER_SEGMENT} radius={FINGER_RADIUS} color={color} />
+      <group position={[0, -FINGER_SEGMENT, 0]} rotation={[bend, 0, 0]}>
+        <Segment length={FINGER_SEGMENT} radius={FINGER_RADIUS} color={color} />
+        <group position={[0, -FINGER_SEGMENT, 0]} rotation={[bend, 0, 0]}>
+          <Segment length={FINGER_SEGMENT} radius={FINGER_RADIUS} color={color} />
+        </group>
+      </group>
+    </group>
+  );
+}
+
+function Thumb({ pose, color }: { pose: HandPose; color: string }) {
+  const bend = pose.thumb * THUMB_BEND;
+  return (
+    <group position={[0.055, 0.015, 0]} rotation={[0, 0, Math.PI / 2 + pose.thumbTilt]}>
+      <Segment length={FINGER_SEGMENT} radius={FINGER_RADIUS} color={color} />
+      <group position={[0, -FINGER_SEGMENT, 0]} rotation={[bend, 0, 0]}>
+        <Segment length={FINGER_SEGMENT} radius={FINGER_RADIUS} color={color} />
+      </group>
+    </group>
+  );
+}
+
+function Hand({ pose, color }: { pose: HandPose; color: string }) {
   return (
     <group>
-      {shape === "open" && (
-        <mesh position={[0, -0.08, 0]}>
-          <boxGeometry args={[0.13, 0.16, 0.025]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-      )}
-      {shape === "fist" && (
-        <mesh position={[0, -0.05, 0]}>
-          <sphereGeometry args={[0.065, 20, 20]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-      )}
-      {shape === "thumbUp" && (
-        <group>
-          <mesh position={[0, -0.05, 0]}>
-            <sphereGeometry args={[0.065, 20, 20]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          <mesh position={[0, 0.03, 0]}>
-            <capsuleGeometry args={[0.022, 0.07, 6, 12]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-        </group>
-      )}
-      {shape === "thumbDown" && (
-        <group>
-          <mesh position={[0, -0.03, 0]}>
-            <sphereGeometry args={[0.065, 20, 20]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          <mesh position={[0, -0.13, 0]}>
-            <capsuleGeometry args={[0.022, 0.07, 6, 12]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-        </group>
-      )}
-      {shape === "point" && (
-        <group>
-          <mesh position={[0, -0.05, 0]}>
-            <sphereGeometry args={[0.065, 20, 20]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          <mesh position={[0, -0.13, 0]}>
-            <capsuleGeometry args={[0.02, 0.08, 6, 12]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-        </group>
-      )}
+      <mesh position={[0, -0.035, 0]}>
+        <boxGeometry args={[0.1, 0.075, 0.04]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+      <group position={[-0.04, -0.055, 0]}>
+        <Finger curl={pose.index} spread={-0.1} color={color} />
+      </group>
+      <group position={[-0.013, -0.055, 0]}>
+        <Finger curl={pose.middle} spread={0} color={color} />
+      </group>
+      <group position={[0.013, -0.055, 0]}>
+        <Finger curl={pose.ring} spread={0} color={color} />
+      </group>
+      <group position={[0.04, -0.055, 0]}>
+        <Finger curl={pose.pinky} spread={0.1} color={color} />
+      </group>
+      <Thumb pose={pose} color={color} />
     </group>
   );
 }
@@ -69,7 +80,7 @@ interface ArmProps {
   shoulderRotation: [number, number, number];
   elbowFlex: number;
   palmRotation: number;
-  hand: HandShape;
+  hand: HandPose;
   handColor: string;
 }
 
@@ -96,7 +107,7 @@ function Arm({
           <meshStandardMaterial color={BODY_COLOR} />
         </mesh>
         <group position={[0, -SKELETON.forearmLength, 0]} rotation={[0, palmRotation, 0]}>
-          <HandMesh shape={hand} color={handColor} />
+          <Hand pose={hand} color={handColor} />
         </group>
       </group>
     </group>

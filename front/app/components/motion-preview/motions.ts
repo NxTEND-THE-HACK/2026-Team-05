@@ -1,5 +1,13 @@
 import type { MotionClip } from "./types";
 import { definePose } from "./types";
+import {
+  HAND_FIST,
+  HAND_OPEN,
+  HAND_POINT,
+  HAND_THUMB_DOWN,
+  HAND_THUMB_UP,
+  handPose,
+} from "./hand";
 
 const NEUTRAL = definePose({});
 
@@ -88,19 +96,25 @@ const motionSwipeLeft: MotionClip = {
 const SNAP_PREP = definePose({
   rightShoulder: { x: -1.6, y: 0, z: 0 },
   rightElbow: 1.9,
-  rightHand: "fist",
+  rightHand: HAND_FIST,
+});
+
+const SNAP_PINCH = definePose({
+  rightShoulder: { x: -1.6, y: 0, z: 0 },
+  rightElbow: 1.9,
+  rightHand: handPose({ thumb: 1, index: 0.3, middle: 0.95, ring: 1, pinky: 1 }),
 });
 
 const SNAP_FIRE = definePose({
   rightShoulder: { x: -1.6, y: 0, z: 0 },
   rightElbow: 1.9,
-  rightHand: "point",
+  rightHand: HAND_POINT,
 });
 
 const SNAP_RETRACT = definePose({
   rightShoulder: { x: -1.6, y: 0, z: 0 },
   rightElbow: 1.9,
-  rightHand: "fist",
+  rightHand: HAND_FIST,
 });
 
 const motionFingerSnap: MotionClip = {
@@ -110,9 +124,9 @@ const motionFingerSnap: MotionClip = {
   keyframes: [
     { time: 0, pose: NEUTRAL },
     { time: 0.6, pose: SNAP_PREP, easing: "easeOut" },
-    { time: 1.1, pose: SNAP_PREP },
+    { time: 1.05, pose: SNAP_PINCH },
     { time: 1.15, pose: SNAP_FIRE },
-    { time: 1.7, pose: SNAP_FIRE },
+    { time: 1.6, pose: SNAP_FIRE },
     { time: 1.8, pose: SNAP_RETRACT },
     { time: 2.4, pose: NEUTRAL, easing: "easeInOut" },
   ],
@@ -122,13 +136,13 @@ const motionFingerSnap: MotionClip = {
 const THUMB_UP_START = definePose({
   rightShoulder: { x: -1.5, y: 0, z: 0 },
   rightElbow: 0.9,
-  rightHand: "thumbUp",
+  rightHand: HAND_THUMB_UP,
 });
 
 const THUMB_UP_END = definePose({
   rightShoulder: { x: -2.6, y: 0, z: 0 },
   rightElbow: 0.5,
-  rightHand: "thumbUp",
+  rightHand: HAND_THUMB_UP,
 });
 
 const motionThumbsUpMoveUp: MotionClip = {
@@ -146,16 +160,20 @@ const motionThumbsUpMoveUp: MotionClip = {
   effects: [{ type: "trail", hand: "right", from: 0.9, to: 1.5 }],
 };
 
+const THUMB_DOWN_NEUTRAL = definePose({
+  rightHand: HAND_THUMB_DOWN,
+});
+
 const THUMB_DOWN_START = definePose({
   rightShoulder: { x: -1.2, y: 0, z: 0 },
   rightElbow: 0.6,
-  rightHand: "thumbDown",
+  rightHand: HAND_THUMB_DOWN,
 });
 
 const THUMB_DOWN_END = definePose({
   rightShoulder: { x: -0.3, y: 0, z: -0.25 },
   rightElbow: 0.3,
-  rightHand: "thumbDown",
+  rightHand: HAND_THUMB_DOWN,
 });
 
 const motionThumbsDownMoveDown: MotionClip = {
@@ -163,12 +181,12 @@ const motionThumbsDownMoveDown: MotionClip = {
   duration: 2.8,
   thumbTime: 1.6,
   keyframes: [
-    { time: 0, pose: NEUTRAL },
+    { time: 0, pose: THUMB_DOWN_NEUTRAL },
     { time: 0.5, pose: THUMB_DOWN_START, easing: "easeOut" },
     { time: 0.9, pose: THUMB_DOWN_START },
     { time: 1.5, pose: THUMB_DOWN_END, easing: "easeIn" },
     { time: 2.0, pose: THUMB_DOWN_END },
-    { time: 2.6, pose: NEUTRAL, easing: "easeInOut" },
+    { time: 2.6, pose: THUMB_DOWN_NEUTRAL, easing: "easeInOut" },
   ],
   effects: [{ type: "trail", hand: "right", from: 0.9, to: 1.5, color: "#f87171" }],
 };
@@ -203,13 +221,19 @@ const motionClap: MotionClip = {
 const OPEN_FIST_TOP = definePose({
   rightShoulder: { x: -1.8, y: 0, z: 0 },
   rightElbow: 0.4,
-  rightHand: "open",
+  rightHand: HAND_OPEN,
+});
+
+const OPEN_FIST_MID = definePose({
+  rightShoulder: { x: -1.2, y: 0, z: 0 },
+  rightElbow: 0.55,
+  rightHand: handPose({ thumb: 0.2, index: 0.1, middle: 0.4, ring: 0.6, pinky: 0.75 }),
 });
 
 const OPEN_FIST_BOTTOM = definePose({
   rightShoulder: { x: -0.6, y: 0, z: 0 },
   rightElbow: 0.7,
-  rightHand: "fist",
+  rightHand: HAND_FIST,
 });
 
 const motionOpenToFistDown: MotionClip = {
@@ -220,6 +244,7 @@ const motionOpenToFistDown: MotionClip = {
     { time: 0, pose: NEUTRAL },
     { time: 0.5, pose: OPEN_FIST_TOP, easing: "easeOut" },
     { time: 0.9, pose: OPEN_FIST_TOP },
+    { time: 1.2, pose: OPEN_FIST_MID },
     { time: 1.5, pose: OPEN_FIST_BOTTOM, easing: "easeIn" },
     { time: 1.9, pose: OPEN_FIST_BOTTOM },
     { time: 2.5, pose: NEUTRAL, easing: "easeInOut" },

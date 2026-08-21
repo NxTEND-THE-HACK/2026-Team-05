@@ -1,10 +1,12 @@
+import { HAND_OPEN, type HandPose } from "./hand";
+
 export interface Vec3 {
   x: number;
   y: number;
   z: number;
 }
 
-export type HandShape = "open" | "fist" | "thumbUp" | "thumbDown" | "point";
+//ポーズの定義ファイル
 
 export interface SkeletonPose {
   rightShoulder: Vec3;
@@ -13,8 +15,8 @@ export interface SkeletonPose {
   leftShoulder: Vec3;
   leftElbow: number;
   leftPalm: number;
-  rightHand: HandShape;
-  leftHand: HandShape;
+  rightHand: HandPose;
+  leftHand: HandPose;
   torsoLean: { x: number; z: number };
   rootOffset: Vec3;
 }
@@ -29,18 +31,18 @@ export interface Keyframe {
 
 export type MotionEffect =
   | {
-      type: "trail";
-      hand: "right" | "left";
-      from: number;
-      to: number;
-      color?: string;
-    }
+    type: "trail";
+    hand: "right" | "left";
+    from: number;
+    to: number;
+    color?: string;
+  }
   | {
-      type: "flash";
-      at: number;
-      position: Vec3;
-      color?: string;
-    };
+    type: "flash";
+    at: number;
+    position: Vec3;
+    color?: string;
+  };
 
 export interface MotionClip {
   code: string;
@@ -57,8 +59,8 @@ export const DEFAULT_POSE: SkeletonPose = {
   leftShoulder: { x: 0, y: 0, z: 0 },
   leftElbow: 0,
   leftPalm: 0,
-  rightHand: "open",
-  leftHand: "open",
+  rightHand: HAND_OPEN,
+  leftHand: HAND_OPEN,
   torsoLean: { x: 0, z: 0 },
   rootOffset: { x: 0, y: 0, z: 0 },
 };

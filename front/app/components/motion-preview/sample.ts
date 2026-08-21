@@ -1,4 +1,5 @@
 import type { EasingName, MotionClip, SkeletonPose, Vec3 } from "./types";
+import { lerpHandPose } from "./hand";
 
 export const SKELETON = {
   shoulderWidth: 0.2,
@@ -64,8 +65,8 @@ export function lerpPose(a: SkeletonPose, b: SkeletonPose, t: number): SkeletonP
     leftShoulder: lerpVec3(a.leftShoulder, b.leftShoulder, t),
     leftElbow: lerp(a.leftElbow, b.leftElbow, t),
     leftPalm: lerp(a.leftPalm, b.leftPalm, t),
-    rightHand: a.rightHand,
-    leftHand: a.leftHand,
+    rightHand: lerpHandPose(a.rightHand, b.rightHand, t),
+    leftHand: lerpHandPose(a.leftHand, b.leftHand, t),
     torsoLean: {
       x: lerp(a.torsoLean.x, b.torsoLean.x, t),
       z: lerp(a.torsoLean.z, b.torsoLean.z, t),
