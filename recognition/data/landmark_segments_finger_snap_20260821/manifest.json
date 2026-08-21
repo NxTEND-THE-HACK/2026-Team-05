@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "input": "data\\finger_snap_collection_20260821.jsonl",
+  "output_dir": "data\\landmark_segments_finger_snap_20260821",
+  "label": "MOTION_FINGER_SNAP",
+  "split_rule": {
+    "marker": "forward open palm",
+    "area_threshold": 0.01,
+    "wrist_x_range": [
+      0.2,
+      0.8
+    ],
+    "wrist_y_range": [
+      0.25,
+      0.75
+    ],
+    "minimum_marker_frames": 5,
+    "merge_gap_frames": 2
+  },
+  "verification": {
+    "expected_samples": 20,
+    "marker_runs": 21,
+    "expected_marker_runs": 21,
+    "segments_created": 20,
+    "sample_count_matches": true,
+    "total_segment_frames": 821
+  },
+  "markers": [
+    {
+      "start_raw_line": 308,
+      "end_raw_line": 321,
+      "frames": 14
+    },
+    {
+      "start_raw_line": 365,
+      "end_raw_line": 381,
+      "frames": 17
+    },
+    {
+      "start_raw_line": 421,
+      "end_raw_line": 436,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 482,
+      "end_raw_line": 493,
+      "frames": 12
+    },
+    {
+      "start_raw_line": 537,
+      "end_raw_line": 550,
+      "frames": 14
+    },
+    {
+      "start_raw_line": 593,
+      "end_raw_line": 603,
+      "frames": 11
+    },
+    {
+      "start_raw_line": 640,
+      "end_raw_line": 649,
+      "frames": 10
+    },
+    {
+      "start_raw_line": 690,
+      "end_raw_line": 697,
+      "frames": 8
+    },
+    {
+      "start_raw_line": 737,
+      "end_raw_line": 746,
+      "frames": 10
+    },
+    {
+      "start_raw_line": 785,
+      "end_raw_line": 794,
+      "frames": 10
+    },
+    {
+      "start_raw_line": 834,
+      "end_raw_line": 844,
+      "frames": 11
+    },
+    {
+      "start_raw_line": 884,
+      "end_raw_line": 893,
+      "frames": 10
+    },
+    {
+      "start_raw_line": 933,
+      "end_raw_line": 942,
+      "frames": 10
+    },
+    {
+      "start_raw_line": 984,
+      "end_raw_line": 993,
+      "frames": 10
+    },
+    {
+      "start_raw_line": 1034,
+      "end_raw_line": 1044,
+      "frames": 11
+    },
+    {
+      "start_raw_line": 1086,
+      "end_raw_line": 1097,
+      "frames": 12
+    },
+    {
+      "start_raw_line": 1143,
+      "end_raw_line": 1151,
+      "frames": 9
+    },
+    {
+      "start_raw_line": 1194,
+      "end_raw_line": 1205,
+      "frames": 12
+    },
+    {
+      "start_raw_line": 1251,
+      "end_raw_line": 1259,
+      "frames": 9
+    },
+    {
+      "start_raw_line": 1301,
+      "end_raw_line": 1312,
+      "frames": 12
+    },
+    {
+      "start_raw_line": 1357,
+      "end_raw_line": 1363,
+      "frames": 7
+    }
+  ],
+  "segments": [
+    {
+      "index": 1,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 1,
+      "segment_id": "MOTION_FINGER_SNAP_01",
+      "start_raw_line": 322,
+      "end_raw_line": 364,
+      "frames": 43,
+      "duration_seconds": 2.811,
+      "file": "MOTION_FINGER_SNAP\\sample_01.jsonl"
+    },
+    {
+      "index": 2,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 2,
+      "segment_id": "MOTION_FINGER_SNAP_02",
+      "start_raw_line": 382,
+      "end_raw_line": 420,
+      "frames": 39,
+      "duration_seconds": 2.54,
+      "file": "MOTION_FINGER_SNAP\\sample_02.jsonl"
+    },
+    {
+      "index": 3,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 3,
+      "segment_id": "MOTION_FINGER_SNAP_03",
+      "start_raw_line": 437,
+      "end_raw_line": 481,
+      "frames": 45,
+      "duration_seconds": 2.941,
+      "file": "MOTION_FINGER_SNAP\\sample_03.jsonl"
+    },
+    {
+      "index": 4,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 4,
+      "segment_id": "MOTION_FINGER_SNAP_04",
+      "start_raw_line": 494,
+      "end_raw_line": 536,
+      "frames": 43,
+      "duration_seconds": 2.81,
+      "file": "MOTION_FINGER_SNAP\\sample_04.jsonl"
+    },
+    {
+      "index": 5,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 5,
+      "segment_id": "MOTION_FINGER_SNAP_05",
+      "start_raw_line": 551,
+      "end_raw_line": 592,
+      "frames": 42,
+      "duration_seconds": 2.745,
+      "file": "MOTION_FINGER_SNAP\\sample_05.jsonl"
+    },
+    {
+      "index": 6,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 6,
+      "segment_id": "MOTION_FINGER_SNAP_06",
+      "start_raw_line": 604,
+      "end_raw_line": 639,
+      "frames": 36,
+      "duration_seconds": 2.344,
+      "file": "MOTION_FINGER_SNAP\\sample_06.jsonl"
+    },
+    {
+      "index": 7,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 7,
+      "segment_id": "MOTION_FINGER_SNAP_07",
+      "start_raw_line": 650,
+      "end_raw_line": 689,
+      "frames": 40,
+      "duration_seconds": 2.616,
+      "file": "MOTION_FINGER_SNAP\\sample_07.jsonl"
+    },
+    {
+      "index": 8,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 8,
+      "segment_id": "MOTION_FINGER_SNAP_08",
+      "start_raw_line": 698,
+      "end_raw_line": 736,
+      "frames": 39,
+      "duration_seconds": 2.547,
+      "file": "MOTION_FINGER_SNAP\\sample_08.jsonl"
+    },
+    {
+      "index": 9,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 9,
+      "segment_id": "MOTION_FINGER_SNAP_09",
+      "start_raw_line": 747,
+      "end_raw_line": 784,
+      "frames": 38,
+      "duration_seconds": 2.469,
+      "file": "MOTION_FINGER_SNAP\\sample_09.jsonl"
+    },
+    {
+      "index": 10,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 10,
+      "segment_id": "MOTION_FINGER_SNAP_10",
+      "start_raw_line": 795,
+      "end_raw_line": 833,
+      "frames": 39,
+      "duration_seconds": 2.527,
+      "file": "MOTION_FINGER_SNAP\\sample_10.jsonl"
+    },
+    {
+      "index": 11,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 11,
+      "segment_id": "MOTION_FINGER_SNAP_11",
+      "start_raw_line": 845,
+      "end_raw_line": 883,
+      "frames": 39,
+      "duration_seconds": 2.549,
+      "file": "MOTION_FINGER_SNAP\\sample_11.jsonl"
+    },
+    {
+      "index": 12,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 12,
+      "segment_id": "MOTION_FINGER_SNAP_12",
+      "start_raw_line": 894,
+      "end_raw_line": 932,
+      "frames": 39,
+      "duration_seconds": 2.539,
+      "file": "MOTION_FINGER_SNAP\\sample_12.jsonl"
+    },
+    {
+      "index": 13,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 13,
+      "segment_id": "MOTION_FINGER_SNAP_13",
+      "start_raw_line": 943,
+      "end_raw_line": 983,
+      "frames": 41,
+      "duration_seconds": 2.672,
+      "file": "MOTION_FINGER_SNAP\\sample_13.jsonl"
+    },
+    {
+      "index": 14,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 14,
+      "segment_id": "MOTION_FINGER_SNAP_14",
+      "start_raw_line": 994,
+      "end_raw_line": 1033,
+      "frames": 40,
+      "duration_seconds": 2.6,
+      "file": "MOTION_FINGER_SNAP\\sample_14.jsonl"
+    },
+    {
+      "index": 15,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 15,
+      "segment_id": "MOTION_FINGER_SNAP_15",
+      "start_raw_line": 1045,
+      "end_raw_line": 1085,
+      "frames": 41,
+      "duration_seconds": 2.676,
+      "file": "MOTION_FINGER_SNAP\\sample_15.jsonl"
+    },
+    {
+      "index": 16,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 16,
+      "segment_id": "MOTION_FINGER_SNAP_16",
+      "start_raw_line": 1098,
+      "end_raw_line": 1142,
+      "frames": 45,
+      "duration_seconds": 2.947,
+      "file": "MOTION_FINGER_SNAP\\sample_16.jsonl"
+    },
+    {
+      "index": 17,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 17,
+      "segment_id": "MOTION_FINGER_SNAP_17",
+      "start_raw_line": 1152,
+      "end_raw_line": 1193,
+      "frames": 42,
+      "duration_seconds": 2.744,
+      "file": "MOTION_FINGER_SNAP\\sample_17.jsonl"
+    },
+    {
+      "index": 18,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 18,
+      "segment_id": "MOTION_FINGER_SNAP_18",
+      "start_raw_line": 1206,
+      "end_raw_line": 1250,
+      "frames": 45,
+      "duration_seconds": 2.949,
+      "file": "MOTION_FINGER_SNAP\\sample_18.jsonl"
+    },
+    {
+      "index": 19,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 19,
+      "segment_id": "MOTION_FINGER_SNAP_19",
+      "start_raw_line": 1260,
+      "end_raw_line": 1300,
+      "frames": 41,
+      "duration_seconds": 2.687,
+      "file": "MOTION_FINGER_SNAP\\sample_19.jsonl"
+    },
+    {
+      "index": 20,
+      "code": "MOTION_FINGER_SNAP",
+      "sample_number": 20,
+      "segment_id": "MOTION_FINGER_SNAP_20",
+      "start_raw_line": 1313,
+      "end_raw_line": 1356,
+      "frames": 44,
+      "duration_seconds": 2.882,
+      "file": "MOTION_FINGER_SNAP\\sample_20.jsonl"
+    }
+  ]
+}

@@ -73,11 +73,40 @@ def test_swipe_right_does_not_require_hand_landmarker_output() -> None:
     initial = _frame(start, wrist_x=0.55)
     moved = _frame(start + timedelta(milliseconds=100), wrist_x=0.35)
 
-    rule = SwipeRightRule()
+    rule = SwipeRightRule(movement_threshold=0.18)
     assert rule.update(LandmarkFrame(initial.captured_at, initial.pose, ())) is None
     result = rule.update(LandmarkFrame(moved.captured_at, moved.pose, ()))
     assert result is not None
     assert result.motion_code == "MOTION_SWIPE_RIGHT"
+
+
+def test_default_swipe_right_ignores_small_daily_wrist_motion() -> None:
+    start = datetime(2026, 8, 5, tzinfo=timezone.utc)
+    rule = SwipeRightRule()
+
+    assert rule.update(_frame(start, wrist_x=0.55)) is None
+    assert rule.update(
+        _frame(start + timedelta(milliseconds=100), wrist_x=0.34)
+    ) is None
+    detection = rule.update(
+        _frame(start + timedelta(milliseconds=200), wrist_x=0.28)
+    )
+    assert detection is not None
+    assert detection.motion_code == "MOTION_SWIPE_RIGHT"
+
+
+def test_default_swipe_right_rejects_large_diagonal_motion() -> None:
+    start = datetime(2026, 8, 5, tzinfo=timezone.utc)
+    rule = SwipeRightRule()
+
+    assert rule.update(_frame(start, wrist_x=0.55, wrist_y=0.50)) is None
+    assert rule.update(
+        _frame(
+            start + timedelta(milliseconds=200),
+            wrist_x=0.28,
+            wrist_y=0.30,
+        )
+    ) is None
 
 
 def test_swipe_requires_a_chest_like_start_region_when_shoulders_are_available() -> None:
@@ -234,7 +263,7 @@ def _snap_hand(extended: bool) -> HandObservation:
 
 def test_finger_snap_is_a_preparation_to_release_transition() -> None:
     at = datetime(2026, 8, 5, tzinfo=timezone.utc)
-    rule = FingerSnapRule()
+    rule = FingerSnapRule(minimum_wrist_displacement=0.0)
 
     assert rule.update(LandmarkFrame(at, {}, (_snap_hand(False),))) is None
     detection = rule.update(LandmarkFrame(at + timedelta(milliseconds=100), {}, (_snap_hand(True),)))
@@ -248,6 +277,20 @@ def test_finger_snap_requires_preparation_state() -> None:
     rule = FingerSnapRule()
 
     assert rule.update(LandmarkFrame(at, {}, (_snap_hand(True),))) is None
+
+
+def test_finger_snap_rejects_a_stationary_shape_change() -> None:
+    at = datetime(2026, 8, 5, tzinfo=timezone.utc)
+    rule = FingerSnapRule()
+
+    assert rule.update(LandmarkFrame(at, {}, (_snap_hand(False),))) is None
+    assert rule.update(
+        LandmarkFrame(
+            at + timedelta(milliseconds=100),
+            {},
+            (_snap_hand(True),),
+        )
+    ) is None
 
 
 def _thumb_hand(pose: str, wrist_y: float = 0.6) -> HandObservation:
@@ -268,7 +311,11 @@ def test_thumbs_up_move_up_and_thumbs_down_move_down() -> None:
 
     # This case verifies re-arming mechanics independently of the default
     # anti-jitter cooldown.
-    thumbs_up = ThumbsUpMoveUpRule(cooldown_seconds=0.0)
+    thumbs_up = ThumbsUpMoveUpRule(
+        cooldown_seconds=0.0,
+        minimum_pose_frames=3,
+        movement_threshold=0.12,
+    )
     assert thumbs_up.update(LandmarkFrame(at, {}, (_thumb_hand("up", 0.6),))) is None
     assert thumbs_up.update(
         LandmarkFrame(at + timedelta(milliseconds=50), {}, (_thumb_hand("up", 0.55),))
@@ -290,7 +337,10 @@ def test_thumbs_up_move_up_and_thumbs_down_move_down() -> None:
     assert detection is not None
     assert detection.motion_code == "MOTION_THUMBS_UP_MOVE_UP"
 
-    thumbs_down = ThumbsDownMoveDownRule(cooldown_seconds=0.0)
+    thumbs_down = ThumbsDownMoveDownRule(
+        cooldown_seconds=0.0,
+        minimum_pose_frames=3,
+    )
     down_pose = {
         "RIGHT_WRIST": Landmark(0.5, 0.45, visibility=0.9),
         "LEFT_SHOULDER": Landmark(0.6, 0.5, visibility=0.9),
@@ -364,7 +414,10 @@ def test_thumbs_up_move_up_and_thumbs_down_move_down() -> None:
 
 def test_thumbs_down_conflicting_good_pose_clears_latch_safely() -> None:
     at = datetime(2026, 8, 5, tzinfo=timezone.utc)
-    rule = ThumbsDownMoveDownRule(cooldown_seconds=0.0)
+    rule = ThumbsDownMoveDownRule(
+        cooldown_seconds=0.0,
+        minimum_pose_frames=3,
+    )
     pose = {
         "RIGHT_WRIST": Landmark(0.5, 0.45, visibility=0.9),
         "LEFT_SHOULDER": Landmark(0.6, 0.5, visibility=0.9),
@@ -407,6 +460,37 @@ def test_thumbs_down_conflicting_good_pose_clears_latch_safely() -> None:
     ) is None
 
 
+def test_thumbs_down_rejects_a_low_stationary_bad_pose() -> None:
+    at = datetime(2026, 8, 5, tzinfo=timezone.utc)
+    rule = ThumbsDownMoveDownRule()
+    shoulders = {
+        "LEFT_SHOULDER": Landmark(0.6, 0.5, visibility=0.9),
+        "RIGHT_SHOULDER": Landmark(0.4, 0.5, visibility=0.9),
+    }
+
+    assert rule.update(
+        LandmarkFrame(
+            at,
+            {
+                **shoulders,
+                "RIGHT_WRIST": Landmark(0.5, 0.45, visibility=0.9),
+            },
+            (),
+        )
+    ) is None
+    for index in range(1, 5):
+        assert rule.update(
+            LandmarkFrame(
+                at + timedelta(milliseconds=index * 100),
+                {
+                    **shoulders,
+                    "RIGHT_WRIST": Landmark(0.5, 0.75, visibility=0.9),
+                },
+                (_thumb_hand("down", 0.75),),
+            )
+        ) is None
+
+
 def test_thumbs_down_is_suppressed_while_the_other_hand_is_swiping_left() -> None:
     at = datetime(2026, 8, 5, tzinfo=timezone.utc)
     rule = ThumbsDownMoveDownRule(cooldown_seconds=0.0)
@@ -445,7 +529,10 @@ def test_thumbs_down_is_suppressed_while_the_other_hand_is_swiping_left() -> Non
 
 def test_thumbs_up_cooldown_blocks_a_quick_duplicate() -> None:
     at = datetime(2026, 8, 5, tzinfo=timezone.utc)
-    rule = ThumbsUpMoveUpRule()
+    rule = ThumbsUpMoveUpRule(
+        minimum_pose_frames=3,
+        movement_threshold=0.12,
+    )
 
     assert rule.update(LandmarkFrame(at, {}, (_thumb_hand("up", 0.6),))) is None
     assert rule.update(
@@ -486,6 +573,46 @@ def test_clap_requires_hands_to_move_from_apart_to_contact() -> None:
     )
     assert detection is not None
     assert detection.motion_code == "MOTION_CLAP"
+
+
+def test_clap_rejects_slow_or_low_hand_contact() -> None:
+    at = datetime(2026, 8, 5, tzinfo=timezone.utc)
+    apart = {
+        "LEFT_WRIST": Landmark(0.2, 0.4, visibility=0.9),
+        "RIGHT_WRIST": Landmark(0.8, 0.4, visibility=0.9),
+        "LEFT_SHOULDER": Landmark(0.4, 0.5, visibility=0.9),
+        "RIGHT_SHOULDER": Landmark(0.6, 0.5, visibility=0.9),
+    }
+    near = {
+        **apart,
+        "LEFT_WRIST": Landmark(0.455, 0.4, visibility=0.9),
+        "RIGHT_WRIST": Landmark(0.545, 0.4, visibility=0.9),
+    }
+    close = {
+        **apart,
+        "LEFT_WRIST": Landmark(0.47, 0.4, visibility=0.9),
+        "RIGHT_WRIST": Landmark(0.53, 0.4, visibility=0.9),
+    }
+
+    slow = ClapRule()
+    assert slow.update(LandmarkFrame(at, apart, ())) is None
+    assert slow.update(
+        LandmarkFrame(at + timedelta(milliseconds=100), near, ())
+    ) is None
+    assert slow.update(
+        LandmarkFrame(at + timedelta(milliseconds=200), close, ())
+    ) is None
+
+    low = ClapRule()
+    low_contact = {
+        **close,
+        "LEFT_WRIST": Landmark(0.47, 0.65, visibility=0.9),
+        "RIGHT_WRIST": Landmark(0.53, 0.65, visibility=0.9),
+    }
+    assert low.update(LandmarkFrame(at, apart, ())) is None
+    assert low.update(
+        LandmarkFrame(at + timedelta(milliseconds=100), low_contact, ())
+    ) is None
 
 
 def _rotation_frame(

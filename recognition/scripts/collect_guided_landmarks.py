@@ -52,6 +52,34 @@ MOTIONS = (
     ),
 )
 
+EXTRA_MOTIONS = (
+    (
+        "MOTION_CLAP",
+        "拍手",
+        "両手を開いた状態から1回だけ拍手する",
+    ),
+    (
+        "MOTION_OPEN_TO_FIST_DOWN",
+        "パーからグーで下げる",
+        "右手を開いた状態から、グーにしながら下へ動かす",
+    ),
+    (
+        "MOTION_HAND_ROTATE_RIGHT",
+        "右手首を右回転",
+        "右手のひらを見せた状態から、右手首を右方向へ回す",
+    ),
+    (
+        "MOTION_HAND_ROTATE_LEFT",
+        "左手首を左回転",
+        "左手のひらを見せた状態から、左手首を左方向へ回す",
+    ),
+)
+
+MOTION_BY_CODE = {
+    motion[0]: motion
+    for motion in (*MOTIONS, *EXTRA_MOTIONS)
+}
+
 
 def _landmark_to_dict(landmark: Landmark) -> dict[str, float | None]:
     return {
@@ -113,6 +141,13 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--status-path", type=Path)
     parser.add_argument("--samples-per-motion", type=int, default=10)
+    parser.add_argument(
+        "--motion-code",
+        dest="motion_codes",
+        action="append",
+        choices=tuple(MOTION_BY_CODE),
+        help="Motion to collect; repeat this option to select multiple motions.",
+    )
     parser.add_argument("--initial-wait-seconds", type=float, default=15.0)
     parser.add_argument("--neutral-seconds", type=float, default=1.2)
     parser.add_argument("--countdown-seconds", type=float, default=2.0)
@@ -147,6 +182,11 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    motions = (
+        tuple(MOTION_BY_CODE[code] for code in args.motion_codes)
+        if args.motion_codes
+        else MOTIONS
+    )
     if args.output.exists():
         raise SystemExit(
             f"output already exists; choose a new path: {args.output}"
@@ -169,7 +209,7 @@ def main() -> None:
         pose_model_path=args.pose_model_path,
         hand_model_path=args.hand_model_path,
     )
-    total_segments = len(MOTIONS) * args.samples_per_motion
+    total_segments = len(motions) * args.samples_per_motion
     saved_records = 0
     sequence = 0
     current: dict[str, object] = {}
@@ -197,7 +237,7 @@ def main() -> None:
                 "phase": phase,
                 "phase_text": phase_text,
                 "motion_index": motion_index,
-                "motion_total": len(MOTIONS),
+                "motion_total": len(motions),
                 "motion_name": motion_name,
                 "sample_number": sample_number,
                 "samples_per_motion": args.samples_per_motion,
@@ -300,7 +340,7 @@ def main() -> None:
             )
 
             for motion_index, (code, name, instruction) in enumerate(
-                MOTIONS,
+                motions,
                 start=1,
             ):
                 for sample_number in range(1, args.samples_per_motion + 1):
@@ -364,8 +404,8 @@ def main() -> None:
                 state="completed",
                 phase="completed",
                 phase_text="収集完了です。",
-                motion_index=len(MOTIONS),
-                motion_name=MOTIONS[-1][1],
+                motion_index=len(motions),
+                motion_name=motions[-1][1],
                 sample_number=args.samples_per_motion,
                 segment_records=0,
                 message="全ポーズの収集が完了しました。",

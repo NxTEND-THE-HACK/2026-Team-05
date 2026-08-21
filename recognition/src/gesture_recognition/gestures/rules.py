@@ -166,8 +166,10 @@ class _SwipeRule:
     start_max_vertical_offset: float = 1.70
     maximum_event_elapsed_seconds: float | None = 1.50
     maximum_event_wrist_y: float | None = None
+    maximum_vertical_displacement: float | None = None
 
     _start_x: float | None = None
+    _start_y: float | None = None
     _latched: bool = False
     _peak_movement: float | None = None
     _started_at: datetime | None = None
@@ -182,6 +184,7 @@ class _SwipeRule:
             if not self._is_start_region(frame, wrist):
                 return None
             self._start_x = wrist.x
+            self._start_y = wrist.y
             self._started_at = frame.captured_at
             return None
 
@@ -191,6 +194,7 @@ class _SwipeRule:
             if movement <= self._peak_movement - self.reset_margin:
                 # The return frame is the next gesture's new chest baseline.
                 self._start_x = wrist.x if self._is_start_region(frame, wrist) else None
+                self._start_y = wrist.y if self._start_x is not None else None
                 self._started_at = (
                     frame.captured_at if self._start_x is not None else None
                 )
@@ -202,6 +206,7 @@ class _SwipeRule:
         # allows repeated swipes even when the resting position drifts.
         if movement < 0:
             self._start_x = wrist.x
+            self._start_y = wrist.y
             self._started_at = frame.captured_at
             movement = 0.0
 
@@ -214,6 +219,15 @@ class _SwipeRule:
                 ).total_seconds()
                 > self.maximum_event_elapsed_seconds
             ):
+                return None
+            if (
+                self.maximum_vertical_displacement is not None
+                and self._start_y is not None
+                and abs(wrist.y - self._start_y)
+                > self.maximum_vertical_displacement
+            ):
+                self._latched = True
+                self._peak_movement = movement
                 return None
             if (
                 self.maximum_event_wrist_y is not None
@@ -255,6 +269,7 @@ class _SwipeRule:
 
     def reset(self) -> None:
         self._start_x = None
+        self._start_y = None
         self._latched = False
         self._peak_movement = None
         self._started_at = None
@@ -276,9 +291,10 @@ class SwipeRightRule(_SwipeRule):
     def __init__(
         self,
         *,
-        movement_threshold: float = 0.18,
+        movement_threshold: float = 0.26,
         reset_margin: float = 0.05,
-        maximum_event_wrist_y: float = 0.60,
+        maximum_event_wrist_y: float = 0.55,
+        maximum_vertical_displacement: float = 0.15,
     ) -> None:
         super().__init__(
             RIGHT_WRIST,
@@ -288,6 +304,7 @@ class SwipeRightRule(_SwipeRule):
             movement_threshold,
             reset_margin,
             maximum_event_wrist_y=maximum_event_wrist_y,
+            maximum_vertical_displacement=maximum_vertical_displacement,
         )
 
 
@@ -299,7 +316,7 @@ class SwipeLeftRule(_SwipeRule):
     subject's perspective.
     """
 
-    def __init__(self, *, movement_threshold: float = 0.18, reset_margin: float = 0.05) -> None:
+    def __init__(self, *, movement_threshold: float = 0.22, reset_margin: float = 0.05) -> None:
         super().__init__(
             LEFT_WRIST, LEFT_SHOULDER, 1.0, "MOTION_SWIPE_LEFT", movement_threshold, reset_margin
         )
@@ -1109,10 +1126,14 @@ class FingerSnapRule:
     minimum_post_snap_thumb_vertical_gap: float = 0.0
     strict_pose_match_distance: float = 0.20
     minimum_detection_interval_seconds: float = 1.80
+    maximum_transition_seconds: float = 3.0
+    minimum_wrist_displacement: float = 0.04
 
     _armed: bool = False
     _latched: bool = False
     _last_detection_at: datetime | None = None
+    _armed_at: datetime | None = None
+    _armed_wrist: Landmark | None = None
 
     def update(self, frame: LandmarkFrame) -> GestureDetection | None:
         hand = _hand_for_pose(frame, RIGHT_WRIST, "Right")
@@ -1129,13 +1150,39 @@ class FingerSnapRule:
             if not post_snap:
                 self._latched = False
                 self._armed = ready
+                self._armed_at = frame.captured_at if ready else None
+                self._armed_wrist = hand.point(0) if ready else None
             return None
 
         if ready:
-            self._armed = True
+            if not self._armed:
+                self._armed = True
+                self._armed_at = frame.captured_at
+                self._armed_wrist = hand.point(0)
             return None
 
         if self._armed and post_snap:
+            transition_seconds = (
+                None
+                if self._armed_at is None
+                else (frame.captured_at - self._armed_at).total_seconds()
+            )
+            wrist_displacement = (
+                None
+                if self._armed_wrist is None
+                else landmark_distance(self._armed_wrist, hand.point(0))
+            )
+            if (
+                transition_seconds is None
+                or transition_seconds < 0
+                or transition_seconds > self.maximum_transition_seconds
+                or wrist_displacement is None
+                or wrist_displacement < self.minimum_wrist_displacement
+            ):
+                self._armed = False
+                self._armed_at = None
+                self._armed_wrist = None
+                return None
             if (
                 self._last_detection_at is not None
                 and (frame.captured_at - self._last_detection_at).total_seconds()
@@ -1143,9 +1190,13 @@ class FingerSnapRule:
             ):
                 self._latched = True
                 self._armed = False
+                self._armed_at = None
+                self._armed_wrist = None
                 return None
             self._latched = True
             self._armed = False
+            self._armed_at = None
+            self._armed_wrist = None
             self._last_detection_at = frame.captured_at
             return GestureDetection(self.motion_code, self._confidence(hand))
 
@@ -1155,6 +1206,8 @@ class FingerSnapRule:
         self._armed = False
         self._latched = False
         self._last_detection_at = None
+        self._armed_at = None
+        self._armed_wrist = None
 
     def _is_ready(self, hand: HandObservation) -> bool:
         return (
@@ -1368,9 +1421,9 @@ class ThumbsUpMoveUpRule(_ThumbVerticalMotionRule):
     def __init__(
         self,
         *,
-        movement_threshold: float = 0.12,
-        minimum_pose_frames: int = 3,
-        minimum_event_wrist_y: float = 0.40,
+        movement_threshold: float = 0.16,
+        minimum_pose_frames: int = 4,
+        minimum_event_wrist_y: float = 0.38,
         cooldown_seconds: float = 0.75,
     ) -> None:
         if minimum_pose_frames < 1:
@@ -1402,10 +1455,10 @@ class ThumbsDownMoveDownRule:
         movement_threshold: float = 0.18,
         maximum_hand_pose_distance: float = 0.15,
         cooldown_seconds: float = 0.75,
-        minimum_pose_frames: int = 3,
+        minimum_pose_frames: int = 4,
         pose_gate_seconds: float = 3.0,
         reset_margin: float = 0.05,
-        maximum_event_vertical_offset: float = 1.60,
+        maximum_event_vertical_offset: float = 0.80,
         maximum_event_elapsed_seconds: float = 2.30,
         minimum_pose_gate_age_without_hand: float = 0.211,
         maximum_stale_pose_gate_age: float = 0.50,
@@ -1522,6 +1575,22 @@ class ThumbsDownMoveDownRule:
         if movement < self.movement_threshold:
             return None
 
+        event_vertical_offset = _pose_vertical_offset_from_shoulders(
+            frame,
+            wrist,
+        )
+        if (
+            pose_ready
+            and event_vertical_offset is not None
+            and event_vertical_offset > self.maximum_event_vertical_offset
+        ):
+            # Collected Bad gestures complete around the chest.  Ordinary
+            # activity produced the same temporary thumb shape only after
+            # the wrist had fallen to the waist region.
+            self._latched = True
+            self._peak_movement = movement
+            return None
+
         if (
             self._last_detection_at is not None
             and (frame.captured_at - self._last_detection_at).total_seconds()
@@ -1565,6 +1634,8 @@ class ClapRule:
     contact_ratio: float = 0.35
     contact_center_ratio: float = 0.30
     release_ratio: float = 1.60
+    minimum_closing_step_ratio: float = 0.35
+    maximum_contact_vertical_offset: float = 0.55
 
     _armed: bool = False
     _latched: bool = False
@@ -1587,9 +1658,13 @@ class ClapRule:
         shoulder_width = abs(left_shoulder.x - right_shoulder.x)
         shoulder_width = max(shoulder_width, 0.001)
         shoulder_center_x = (left_shoulder.x + right_shoulder.x) / 2.0
+        shoulder_center_y = (left_shoulder.y + right_shoulder.y) / 2.0
         ratio = abs(left_wrist.x - right_wrist.x) / shoulder_width
         left_center_ratio = abs(left_wrist.x - shoulder_center_x) / shoulder_width
         right_center_ratio = abs(right_wrist.x - shoulder_center_x) / shoulder_width
+        contact_vertical_offset = abs(
+            ((left_wrist.y + right_wrist.y) / 2.0) - shoulder_center_y
+        ) / shoulder_width
         previous_ratio = self._previous_ratio
         self._previous_ratio = ratio
 
@@ -1605,7 +1680,8 @@ class ClapRule:
             and left_center_ratio <= self.contact_center_ratio
             and right_center_ratio <= self.contact_center_ratio
             and previous_ratio is not None
-            and ratio < previous_ratio
+            and previous_ratio - ratio >= self.minimum_closing_step_ratio
+            and contact_vertical_offset <= self.maximum_contact_vertical_offset
         ):
             self._latched = True
             confidence = (self.release_ratio - ratio) / (
