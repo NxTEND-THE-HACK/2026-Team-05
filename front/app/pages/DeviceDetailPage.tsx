@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Button,
   Card,
   Descriptions,
   Result,
@@ -13,6 +14,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { PlusOutlined } from "@ant-design/icons";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams } from "react-router";
 import { BackToDashboard } from "~/components/common/BackToDashboard";
@@ -22,7 +24,12 @@ import { useActions } from "~/hooks/useActions";
 import { useMotions } from "~/hooks/useMotions";
 import { useExecuteAction } from "~/hooks/useExecuteAction";
 import { useApplianceState } from "~/hooks/useApplianceState";
+import { useTestIR } from "~/hooks/useIRController";
 import { queryKeys } from "~/hooks/queryKeys";
+import { IRControllerStatus } from "~/components/ir/IRControllerStatus";
+import { IRActionButtonGrid } from "~/components/ir/IRActionButtonGrid";
+import { IRLearnActionModal } from "~/components/ir/IRLearnActionModal";
+import { TuyaActionFormModal } from "~/components/action/TuyaActionFormModal";
 import {
   groupActionsIntoRows,
   isRowToggleable,
@@ -32,7 +39,14 @@ import {
   reconcileOptimisticState,
   resolveDisplayStateValue,
 } from "~/lib/displayState";
-import type { MotionBinding, Motion, Action } from "~/types/backendApi";
+import {
+  isIRAction,
+  isTuyaAction,
+  type IRAction,
+  type MotionBinding,
+  type Motion,
+  type Action,
+} from "~/types/backendApi";
 
 const { Title, Text } = Typography;
 
@@ -79,6 +93,8 @@ export function DeviceDetailPage() {
   const executeAction = useExecuteAction();
   const queryClient = useQueryClient();
   const [executingId, setExecutingId] = useState<string | null>(null);
+  const [learnModalOpen, setLearnModalOpen] = useState(false);
+  const [tuyaActionModalOpen, setTuyaActionModalOpen] = useState(false);
 
   const loading =
     appliancesLoading || bindingsLoading || actionsLoading || motionsLoading;
@@ -88,14 +104,26 @@ export function DeviceDetailPage() {
     [appliances, deviceId],
   );
 
+  const isIR = appliance?.controlProvider === "ESP32_IR";
+
   const deviceActions = useMemo(
     () => actions.filter((a) => a.applianceId === appliance?.id),
     [actions, appliance?.id],
   );
 
-  const controlRows = useMemo<ControlRow[]>(
-    () => groupActionsIntoRows(deviceActions),
+  const tuyaActions = useMemo(
+    () => deviceActions.filter(isTuyaAction),
     [deviceActions],
+  );
+
+  const irActions = useMemo(
+    () => deviceActions.filter(isIRAction),
+    [deviceActions],
+  );
+
+  const controlRows = useMemo<ControlRow[]>(
+    () => groupActionsIntoRows(tuyaActions),
+    [tuyaActions],
   );
 
   // 行ごとに「直前に実行した結果が on かどうか」を覚えておく楽観的状態。
@@ -108,10 +136,9 @@ export function DeviceDetailPage() {
   //   1) optimisticState (直前のトグル操作の即時反映)
   //   2) applianceState.value (バックエンドが返した実機の値)
   //   3) "unknown" (値不明)
-  // optimisticState は applianceState が更新されるたびにクリアし、Tuya 側の
-  // 物理操作やポーリング結果が常に最優先で反映されるようにする。
+  // 赤外線デバイスでは実機状態を取得できないため、Tuya のときだけ有効化する。
   const { data: applianceState, isLoading: applianceStateLoading, dataUpdatedAt } =
-    useApplianceState(deviceId);
+    useApplianceState(!isIR ? deviceId : undefined);
 
   const resolveStateForRow = (row: ControlRow) => {
     if (!applianceState) return undefined;
@@ -138,13 +165,9 @@ export function DeviceDetailPage() {
     });
   };
 
-
-
   // applianceState が更新 (=フェッチ完了) するたびに、楽観状態と実機状態が
   // 一致していれば楽観状態をクリアする。一致していない間は Tuya Cloud への
   // 反映遅延や物理操作が疑われるため、ユーザが押した結果を最優先で表示し続ける。
-  // こうしないと invalidateQueries が古い値 (=押下前) を返した瞬間に UI が
-  // 1回ずれで先祖返りする。
   useEffect(() => {
     if (dataUpdatedAt === 0) return;
     const actualValues: Record<string, boolean | undefined> = {};
@@ -175,15 +198,12 @@ export function DeviceDetailPage() {
   }, [appliance, bindings, actions, motions]);
 
   const handleToggle = async (row: ControlRow, next: boolean) => {
-    // 両方向の Action が揃っていない行はトグル不可。UI 側でも disabled にしているが、
-    // 念のためここでも防御する。
     if (!isRowToggleable(row)) {
       message.warning(
         `${row.name} は ON/OFF 両方のアクションが揃っていないため操作できません`,
       );
       return;
     }
-    // next と一致する方向の Action を厳密に選ぶ。存在しなければエラー。
     const target = next ? row.onAction : row.offAction;
     if (!target) {
       message.error(`${row.name} の ${next ? "ON" : "OFF"} アクションが見つかりません`);
@@ -194,9 +214,6 @@ export function DeviceDetailPage() {
       const result = await executeAction.mutateAsync(target.id);
       if (result.success) {
         setOptimisticState((prev) => ({ ...prev, [row.key]: next }));
-        // バックエンド側の最新状態を即時取り直す。成功時の偽陽性や
-        // Tuya 側の遅延反映もここで吸収する。invalidate 完了時に useEffect が
-        // optimisticState をクリアするため、ポーリングや物理操作にも追従する。
         if (deviceId) {
           void queryClient.invalidateQueries({
             queryKey: queryKeys.applianceState(deviceId),
@@ -259,9 +276,6 @@ export function DeviceDetailPage() {
       width: 140,
       render: (_: unknown, row: ControlRow) => {
         const display = resolveDisplayState(row);
-        // 不明状態 (value=null / 未取得) は checked を false に固定して、
-        // 見た目上 ON と OFF のどちらでもない状態を作る。トグル操作で
-        // ON へ倒すと ON Action が走り、OFF Action は未実行のため状態は遷移する。
         const checked = display === true;
         const toggleable = isRowToggleable(row);
         const isLoading =
@@ -323,51 +337,56 @@ export function DeviceDetailPage() {
           <Descriptions.Item label="Category">
             {appliance.category}
           </Descriptions.Item>
-          <Descriptions.Item label="Status">
-            {(() => {
-              const row = controlRows[0];
-              if (!row) return <Tag>不明</Tag>;
-              const display = resolveDisplayState(row);
-              const rowState = resolveStateForRow(row);
-              if (display === "unknown") return <Tag>不明</Tag>;
-              const tip = rowState?.source === "dry-run"
-                ? "dry-run モード"
-                : rowState?.source === "tuya"
-                  ? `最終取得: ${applianceState?.fetchedAt ?? "?"}`
-                  : rowState?.error ?? "実機状態";
-              return (
-                <Tooltip title={tip}>
-                  <Tag color={display ? "success" : "default"}>
-                    {display ? "ON" : "OFF"}
-                  </Tag>
-                </Tooltip>
-              );
-            })()}
+          <Descriptions.Item label="操作方式">
+            {isIR ? (
+              <Tag color="purple">赤外線 (ESP32_IR)</Tag>
+            ) : (
+              <Tag color="blue">Tuya</Tag>
+            )}
           </Descriptions.Item>
           <Descriptions.Item label="ID">{appliance.id}</Descriptions.Item>
         </Descriptions>
       </Card>
 
-      <Card
-        title="Manual Control"
-        extra={
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            モーションを使わずに直接操作
-          </Text>
-        }
-      >
-        <Table
-          columns={actionColumns}
-          dataSource={controlRows}
-          rowKey="key"
-          pagination={false}
-          size="middle"
-          locale={{
-            emptyText:
-              "このデバイスに登録されたアクションがありません。アクション作成後に手動操作できます。",
-          }}
+      {isIR ? (
+        <IRManualControl
+          applianceId={appliance.id}
+          irActions={irActions}
+          actionsLoading={actionsLoading}
+          onLearn={() => setLearnModalOpen(true)}
         />
-      </Card>
+      ) : (
+        <Card
+          title="Manual Control"
+          extra={
+            <Space size="small">
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                モーションを使わずに直接操作
+              </Text>
+              <Button
+                type="primary"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => setTuyaActionModalOpen(true)}
+              >
+                操作を追加
+              </Button>
+            </Space>
+          }
+        >
+          <Table
+            columns={actionColumns}
+            dataSource={controlRows}
+            rowKey="key"
+            pagination={false}
+            size="middle"
+            locale={{
+              emptyText:
+                "このデバイスに登録されたアクションがありません。「操作を追加」から作成してください。",
+            }}
+          />
+        </Card>
+      )}
 
       <Card title="Bound Motions">
         <Table
@@ -381,6 +400,73 @@ export function DeviceDetailPage() {
           }}
         />
       </Card>
+
+      <IRLearnActionModal
+        applianceId={appliance.id}
+        open={learnModalOpen}
+        onClose={() => setLearnModalOpen(false)}
+      />
+      <TuyaActionFormModal
+        applianceId={appliance.id}
+        open={tuyaActionModalOpen}
+        onClose={() => setTuyaActionModalOpen(false)}
+      />
     </Space>
+  );
+}
+
+function IRManualControl({
+  applianceId,
+  irActions,
+  actionsLoading,
+  onLearn,
+}: {
+  applianceId: string;
+  irActions: IRAction[];
+  actionsLoading: boolean;
+  onLearn: () => void;
+}) {
+  const testIR = useTestIR();
+  const [testing, setTesting] = useState(false);
+
+  const handleTest = async () => {
+    setTesting(true);
+    try {
+      await testIR.mutateAsync(applianceId);
+      message.success("赤外線LEDテスト信号を送信しました");
+    } catch (err) {
+      message.error(
+        err instanceof Error ? err.message : "テスト信号の送信に失敗しました",
+      );
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <Card
+      title="Manual Control"
+      extra={
+        <Space size="small">
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            登録済みの赤外線ボタン
+          </Text>
+          <Button size="small" loading={testing} onClick={handleTest}>
+            LEDテスト
+          </Button>
+          <Button type="primary" size="small" icon={<PlusOutlined />} onClick={onLearn}>
+            ボタンを登録
+          </Button>
+        </Space>
+      }
+    >
+      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+        <IRControllerStatus applianceId={applianceId} />
+        <IRActionButtonGrid
+          actions={irActions}
+          loading={actionsLoading}
+        />
+      </Space>
+    </Card>
   );
 }
