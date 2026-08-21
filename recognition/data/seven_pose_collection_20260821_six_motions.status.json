@@ -1,0 +1,20 @@
+{
+  "state": "stopped",
+  "phase": "stopped",
+  "phase_text": "計測を停止しました。",
+  "motion_index": 1,
+  "motion_total": 6,
+  "motion_code": "POSE_RIGHT_HAND_UP",
+  "motion_name": "右手上げ",
+  "instruction": "右手を上げて、その姿勢を保つ",
+  "sample_number": 3,
+  "samples_per_motion": 10,
+  "segment_index": 3,
+  "segments_total": 60,
+  "phase_remaining_seconds": 0.0,
+  "segment_records": 36,
+  "saved_records": 108,
+  "output": "data\\seven_pose_collection_20260821_six_motions.jsonl",
+  "message": "停止時点までの対象動作フレームを保存しました。",
+  "updated_at": "2026-08-21T13:43:31.514378+09:00"
+}
