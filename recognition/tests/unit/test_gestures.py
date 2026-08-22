@@ -99,18 +99,45 @@ def test_default_swipe_right_ignores_small_daily_wrist_motion() -> None:
     assert detection.motion_code == "MOTION_SWIPE_RIGHT"
 
 
-def test_default_swipe_right_rejects_large_diagonal_motion() -> None:
+def test_swipe_right_matches_horizontally_mirrored_left_swipe() -> None:
     start = datetime(2026, 8, 5, tzinfo=timezone.utc)
-    rule = SwipeRightRule()
+    shoulders = {
+        "LEFT_SHOULDER": Landmark(0.55, 0.55, visibility=0.9),
+        "RIGHT_SHOULDER": Landmark(0.45, 0.55, visibility=0.9),
+    }
 
-    assert rule.update(_frame(start, wrist_x=0.55, wrist_y=0.50)) is None
-    assert rule.update(
-        _frame(
-            start + timedelta(milliseconds=200),
-            wrist_x=0.28,
-            wrist_y=0.30,
+    def frame_at(index: int, *, wrist_name: str, x: float) -> LandmarkFrame:
+        return LandmarkFrame(
+            start + timedelta(milliseconds=index * 100),
+            {
+                **shoulders,
+                wrist_name: Landmark(x, 0.65, visibility=0.9),
+            },
+            (),
         )
-    ) is None
+
+    left_rule = SwipeLeftRule()
+    right_rule = SwipeRightRule()
+    left_path = (0.52, 0.61, 0.75)
+    left_detection = None
+    right_detection = None
+
+    for index, left_x in enumerate(left_path):
+        left_detection = left_rule.update(
+            frame_at(index, wrist_name="LEFT_WRIST", x=left_x)
+        )
+        right_detection = right_rule.update(
+            frame_at(index, wrist_name="RIGHT_WRIST", x=1.0 - left_x)
+        )
+
+        assert (left_detection is None) == (right_detection is None)
+        if left_detection is not None and right_detection is not None:
+            assert left_detection.motion_code == "MOTION_SWIPE_LEFT"
+            assert right_detection.motion_code == "MOTION_SWIPE_RIGHT"
+            assert left_detection.confidence == right_detection.confidence
+
+    assert left_detection is not None
+    assert right_detection is not None
 
 
 def test_swipe_requires_a_chest_like_start_region_when_shoulders_are_available() -> None:

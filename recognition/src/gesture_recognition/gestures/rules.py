@@ -282,7 +282,7 @@ class _SwipeRule:
 
 
 class SwipeRightRule(_SwipeRule):
-    """Detect the person's rightward movement in a front-facing stream.
+    """Mirror the left-swipe rule for the person's right hand.
 
     The subject's right is the image's left when the camera is facing them,
     so the normalized image X coordinate decreases.
@@ -291,10 +291,8 @@ class SwipeRightRule(_SwipeRule):
     def __init__(
         self,
         *,
-        movement_threshold: float = 0.26,
+        movement_threshold: float = 0.22,
         reset_margin: float = 0.05,
-        maximum_event_wrist_y: float = 0.55,
-        maximum_vertical_displacement: float = 0.15,
     ) -> None:
         super().__init__(
             RIGHT_WRIST,
@@ -303,8 +301,6 @@ class SwipeRightRule(_SwipeRule):
             "MOTION_SWIPE_RIGHT",
             movement_threshold,
             reset_margin,
-            maximum_event_wrist_y=maximum_event_wrist_y,
-            maximum_vertical_displacement=maximum_vertical_displacement,
         )
 
 
