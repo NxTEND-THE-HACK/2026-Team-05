@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -20,6 +21,10 @@ import (
 var (
 	deviceIDPattern   = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 	switchCodePattern = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+
+	// ErrDryRun は dry-run モードで実機状態を取得しようとしたときに返される。
+	// 呼び出し側は state を返さずに「不明」として扱う。
+	ErrDryRun = errors.New("tuya state is unavailable in dry-run mode")
 )
 
 type Tuya struct {
@@ -42,6 +47,29 @@ type tuyaResponse struct {
 	Result  bool   `json:"result"`
 }
 
+// DeviceStateResult は Tuya OpenAPI の /devices/{id}/status レスポンス result 部。
+// `code` ごとに最新値 `value` が返る。value は bool/string/number など型がさまざまで
+// くるので interface{} で受け取り、呼び出し側で解釈する。
+type DeviceStateResult struct {
+	Code  string `json:"code"`
+	Value any    `json:"value"`
+}
+
+type DeviceStateResponse struct {
+	Code    int                `json:"code"`
+	Message string             `json:"msg"`
+	Success bool               `json:"success"`
+	Result  []DeviceStateResult `json:"result"`
+}
+
+// DeviceState は executor 間でやり取りする正規化された現在状態。
+// value が確定できないときは nil (unknown) として返す。
+type DeviceState struct {
+	Online     bool
+	SwitchCode string
+	Value      *bool
+}
+
 func NewTuya(cfg config.TuyaConfig, logger *slog.Logger) (*Tuya, error) {
 	apiHost, messageHost, err := tuyaHosts(cfg.Region)
 	if err != nil {
@@ -62,6 +90,61 @@ func NewTuya(cfg config.TuyaConfig, logger *slog.Logger) (*Tuya, error) {
 func (t *Tuya) Validate(action domain.Action) error {
 	_, _, _, err := t.command(action)
 	return err
+}
+
+// GetState は指定 device の現在状態を Tuya Cloud から取得する。
+// switchCode が空文字の場合は "switch" をデフォルトとする。
+// dry-run モードではオンライン状態を取得できないため ErrDryRun を返す。
+func (t *Tuya) GetState(ctx context.Context, deviceID, switchCode string) (DeviceState, error) {
+	if !deviceIDPattern.MatchString(strings.TrimPrefix(deviceID, "dry-run:")) {
+		return DeviceState{}, fmt.Errorf("Tuya device ID contains invalid characters")
+	}
+	if t.dryRun {
+		return DeviceState{}, ErrDryRun
+	}
+	code := strings.TrimSpace(switchCode)
+	if code == "" {
+		code = "switch"
+	}
+	if !switchCodePattern.MatchString(code) {
+		return DeviceState{}, fmt.Errorf("Tuya switchCode contains invalid characters")
+	}
+	var resp DeviceStateResponse
+	err := connector.MakeGetRequest(
+		ctx,
+		connector.WithAPIUri(fmt.Sprintf("/v1.0/iot-03/devices/%s/status", deviceID)),
+		connector.WithResp(&resp),
+	)
+	if err != nil {
+		return DeviceState{}, fmt.Errorf("fetch Tuya device state: %w", err)
+	}
+	if !resp.Success {
+		// 20404: device offline, 28841002/28841003: token/permission, 1106: rate limit 等
+		// online=false として扱うかは呼び出し側の責務なので、ここでは false を返す。
+		return DeviceState{Online: false, SwitchCode: code}, nil
+	}
+	state := DeviceState{Online: true, SwitchCode: code}
+	for _, item := range resp.Result {
+		if item.Code != code {
+			continue
+		}
+		switch v := item.Value.(type) {
+		case bool:
+			b := v
+			state.Value = &b
+		case string:
+			switch v {
+			case "true", "on", "1":
+				b := true
+				state.Value = &b
+			case "false", "off", "0":
+				b := false
+				state.Value = &b
+			}
+		}
+		break
+	}
+	return state, nil
 }
 
 func (t *Tuya) Execute(ctx context.Context, action domain.Action) error {
@@ -95,6 +178,13 @@ func (t *Tuya) Execute(ctx context.Context, action domain.Action) error {
 	}
 	t.logger.Info("Tuya command succeeded", "action_id", action.ID, "device_id", deviceID, "value", value)
 	return nil
+}
+
+// ResolveDevice は action の params を解釈して device ID / switch code を返す。
+// 状態取得など、command 実行を伴わない場面でも params を一貫して解釈するために使う。
+func (t *Tuya) ResolveDevice(action domain.Action) (deviceID, switchCode string, err error) {
+	deviceID, switchCode, _, err = t.command(action)
+	return deviceID, switchCode, err
 }
 
 func (t *Tuya) command(action domain.Action) (string, string, bool, error) {

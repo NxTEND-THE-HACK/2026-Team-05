@@ -18,24 +18,90 @@ export interface Motion {
   description: string;
 }
 
+export type ControlProvider = "TUYA" | "ESP32_IR";
+
 export interface Appliance {
   id: string;
   name: string;
   category: string;
+  controlProvider: ControlProvider;
+  controllerId?: string;
   createdAt: string;
 }
 
-export interface Action {
+export interface IRSignal {
+  protocol: string;
+  bits?: number;
+  code?: string;
+  address?: string;
+  command?: string;
+  raw?: number[];
+  carrierHz: number;
+}
+
+export interface TuyaActionParams {
+  deviceId?: string;
+  deviceIdEnv?: string;
+  switchCode?: string;
+  value?: boolean;
+}
+
+export interface IRActionParams {
+  controllerId: string;
+  signal: IRSignal;
+  repeat: number;
+}
+
+export interface TuyaAction {
   id: string;
   applianceId: string;
   name: string;
   providerType: "TUYA";
-  params: {
-    deviceId?: string;
-    deviceIdEnv?: "PLUG_A_ID" | "PLUG_B_ID" | "PLUG_C_ID";
-    switchCode?: string;
-    value: boolean;
-  };
+  params: TuyaActionParams;
+}
+
+export interface IRAction {
+  id: string;
+  applianceId: string;
+  name: string;
+  providerType: "ESP32_IR";
+  params: IRActionParams;
+}
+
+export type Action = TuyaAction | IRAction;
+
+export function isTuyaAction(action: Action): action is TuyaAction {
+  return action.providerType === "TUYA";
+}
+
+export function isIRAction(action: Action): action is IRAction {
+  return action.providerType === "ESP32_IR";
+}
+
+export interface IRLearnCapture {
+  captureId: string;
+  isRepeat: boolean;
+  signal: IRSignal;
+}
+
+export interface IRLearningSession {
+  sessionId: string;
+  applianceId: string;
+  controllerId: string;
+  state: "learning" | "captured" | string;
+  expiresAt: string;
+  capture?: IRLearnCapture;
+}
+
+export interface IRControllerHealth {
+  ok: boolean;
+  controllerId?: string;
+  state: "idle" | "learning" | "sending" | "error" | string;
+  wifiConnected: boolean;
+  rssi?: number;
+  ip?: string;
+  firmwareVersion?: string;
+  message?: string;
 }
 
 export interface MotionBinding {
@@ -61,6 +127,27 @@ export interface ActionLog {
   status: ActionLogStatus;
   errorMessage?: string;
   detectedAt: string;
+}
+
+export interface CreateApplianceRequest {
+  name: string;
+  category: string;
+  controlProvider?: ControlProvider;
+  controllerId?: string;
+}
+
+export interface CreateActionRequest {
+  applianceId: string;
+  name: string;
+  providerType: "TUYA";
+  params: TuyaActionParams;
+}
+
+export interface ConfirmIRLearnRequest {
+  sessionId: string;
+  captureId: string;
+  name: string;
+  repeat?: number;
 }
 
 export interface CreateBindingRequest {

@@ -1,0 +1,20 @@
+{
+  "state": "stopped",
+  "phase": "stopped",
+  "phase_text": "計測を停止しました。",
+  "motion_index": 1,
+  "motion_total": 6,
+  "motion_code": "POSE_RIGHT_HAND_UP",
+  "motion_name": "右手上げ",
+  "instruction": "右手を上げて、その姿勢を保つ",
+  "sample_number": 7,
+  "samples_per_motion": 10,
+  "segment_index": 7,
+  "segments_total": 60,
+  "phase_remaining_seconds": 0.0,
+  "segment_records": 65,
+  "saved_records": 442,
+  "output": "data\\mediapipe_raw_20260820.jsonl",
+  "message": "停止時点までの対象動作フレームを保存しました。",
+  "updated_at": "2026-08-20T13:11:19.093712+09:00"
+}

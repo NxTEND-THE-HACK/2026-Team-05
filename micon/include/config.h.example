@@ -8,6 +8,15 @@
 // Use a different ID on each of the two boards.
 #define CAMERA_ID "demo-camera-1"
 
+// Set this to 0 to use DHCP. The main demo-camera-1 uses .106. Give every
+// additional camera a unique address outside the router's DHCP pool.
+#define CAMERA_USE_STATIC_IP 1
+#define CAMERA_STATIC_IP "192.168.10.106"
+#define CAMERA_GATEWAY "192.168.10.1"
+#define CAMERA_SUBNET "255.255.255.0"
+#define CAMERA_PRIMARY_DNS "192.168.10.1"
+#define CAMERA_SECONDARY_DNS "8.8.8.8"
+
 // 80 is convenient for the Python worker: http://<camera-ip>/stream
 #define CAMERA_HTTP_PORT 80
 
@@ -19,3 +28,22 @@
 // 8 is a high-quality starting point for SVGA streaming; 5-7 is sharper but
 // heavier and may reduce the achievable FPS.
 #define CAMERA_JPEG_QUALITY 8
+
+// Cap the MJPEG stream so camera work leaves predictable CPU and Wi-Fi
+// headroom. This is an upper bound; capture may be slower at larger frame
+// sizes.
+#define CAMERA_MAX_FPS 15
+
+// The camera HTTP server creates one bounded task per connected client.
+// This covers two stream clients plus short health/snapshot checks.
+#define CAMERA_MAX_HTTP_CLIENTS 4
+
+// Do not serve a frame once it has been this old. If capture does not make
+// progress for the watchdog interval, the device restarts itself.
+#define CAMERA_FRAME_STALE_TIMEOUT_MS 1000
+#define CAMERA_CAPTURE_WATCHDOG_TIMEOUT_MS 10000
+#define CAMERA_CAPTURE_STARTUP_DELAY_MS 1000
+
+// Slow or incomplete HTTP clients are closed after these limits.
+#define CAMERA_CLIENT_REQUEST_TIMEOUT_MS 3000
+#define CAMERA_CLIENT_WRITE_TIMEOUT_MS 2000

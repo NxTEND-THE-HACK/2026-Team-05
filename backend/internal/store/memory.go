@@ -122,11 +122,21 @@ func (m *Memory) ListLogs(_ context.Context, limit int) ([]domain.ActionLog, err
 }
 
 func (m *Memory) CreateAppliance(_ context.Context, input domain.CreateApplianceInput) (domain.Appliance, error) {
+	if input.ControlProvider == "" {
+		input.ControlProvider = domain.ProviderTuya
+	}
 	id, err := domain.NewID("appliance")
 	if err != nil {
 		return domain.Appliance{}, err
 	}
-	item := domain.Appliance{ID: id, Name: input.Name, Category: input.Category, CreatedAt: time.Now().UTC()}
+	item := domain.Appliance{
+		ID:              id,
+		Name:            input.Name,
+		Category:        input.Category,
+		ControlProvider: input.ControlProvider,
+		ControllerID:    input.ControllerID,
+		CreatedAt:       time.Now().UTC(),
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.appliances[item.ID] = item
@@ -181,12 +191,50 @@ func (m *Memory) CreateBinding(_ context.Context, input domain.CreateBindingInpu
 	return item, nil
 }
 
+func (m *Memory) DeleteAction(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.actions[id]; !ok {
+		return ErrNotFound
+	}
+	delete(m.actions, id)
+	for bindingID, binding := range m.bindings {
+		if binding.ActionID != id {
+			continue
+		}
+		delete(m.bindings, bindingID)
+		delete(m.lastExecuted, bindingID)
+	}
+	return nil
+}
+
+func (m *Memory) DeleteBinding(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.bindings[id]; !ok {
+		return ErrNotFound
+	}
+	delete(m.bindings, id)
+	delete(m.lastExecuted, id)
+	return nil
+}
+
 func (m *Memory) ActionByID(_ context.Context, id string) (domain.Action, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	item, ok := m.actions[id]
 	if !ok {
 		return domain.Action{}, ErrNotFound
+	}
+	return item, nil
+}
+
+func (m *Memory) ApplianceByID(_ context.Context, id string) (domain.Appliance, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	item, ok := m.appliances[id]
+	if !ok {
+		return domain.Appliance{}, ErrNotFound
 	}
 	return item, nil
 }

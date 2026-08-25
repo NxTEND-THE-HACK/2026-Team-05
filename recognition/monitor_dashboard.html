@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>モーション判定モニター</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+      background: #101522;
+      color: #eef3ff;
+    }
+    body { margin: 0; padding: 28px; }
+    .shell { max-width: 980px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+    h1 { margin: 0; font-size: 30px; }
+    .status { color: #9fb0c9; font-size: 14px; }
+    .safe { margin: 22px 0; padding: 14px 18px; border: 1px solid #2c9a70; border-radius: 12px; background: #123427; color: #b9f4d9; font-weight: 700; }
+    .camera-panel { margin: 22px 0; padding: 18px; border: 1px solid #34415e; border-radius: 16px; background: #171e2e; }
+    .camera-panel h2 { margin-bottom: 14px; }
+    .camera-summary { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; }
+    .camera-dot { width: 13px; height: 13px; border-radius: 50%; background: #9fb0c9; box-shadow: 0 0 0 4px #9fb0c922; }
+    .camera-panel.connected .camera-dot { background: #49d391; box-shadow: 0 0 0 4px #49d39122; }
+    .camera-panel.connecting .camera-dot, .camera-panel.reconnecting .camera-dot { background: #f3c969; box-shadow: 0 0 0 4px #f3c96922; }
+    .camera-panel.stale .camera-dot, .camera-panel.stopped .camera-dot, .camera-panel.error .camera-dot { background: #f27878; box-shadow: 0 0 0 4px #f2787822; }
+    .camera-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+    .camera-detail { padding: 12px; border-radius: 10px; background: #202a40; }
+    .camera-detail-label { color: #9fb0c9; font-size: 12px; }
+    .camera-detail-value { margin-top: 5px; font-size: 16px; font-weight: 700; }
+    .camera-error { margin-top: 14px; padding: 10px 12px; border-radius: 9px; background: #3b2028; color: #ffb7b7; font-size: 13px; }
+    .processing-panel { margin-top: 22px; padding: 18px; border: 1px solid #34415e; border-radius: 16px; background: #171e2e; }
+    .processing-details { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .processing-detail { padding: 12px; border-radius: 10px; background: #202a40; }
+    .processing-detail-label { color: #9fb0c9; font-size: 12px; }
+    .processing-detail-value { margin-top: 5px; font-size: 16px; font-weight: 700; }
+    .processing-warning { margin-top: 14px; padding: 10px 12px; border-radius: 9px; background: #493b20; color: #f7d98b; font-size: 13px; }
+    .landmark-panel { margin-top: 26px; padding: 18px; border: 1px solid #34415e; border-radius: 16px; background: #171e2e; }
+    .landmark-stage { position: relative; min-height: 260px; display: grid; place-items: center; overflow: hidden; border-radius: 12px; background: #0c111d; }
+    .landmark-stage img { display: block; width: 100%; height: auto; max-height: 560px; object-fit: contain; }
+    .landmark-empty { padding: 40px 20px; color: #9fb0c9; text-align: center; }
+    .landmark-details { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; color: #afc2e5; font-size: 14px; }
+    .latest { min-height: 230px; display: grid; place-items: center; text-align: center; border: 1px solid #34415e; border-radius: 18px; background: linear-gradient(135deg, #1e2c4b, #182033); box-shadow: 0 20px 50px #06091288; }
+    .latest.stale { border-color: #886f36; background: linear-gradient(135deg, #3a321f, #28251d); }
+    .latest.empty { color: #9fb0c9; }
+    .latest-name { font-size: 56px; font-weight: 800; letter-spacing: .02em; }
+    .latest-code { margin-top: 12px; color: #afc2e5; font: 16px ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .latest-age { margin-top: 10px; color: #f7d98b; font-size: 14px; }
+    .confidence { margin-top: 16px; color: #8de1ba; font-size: 20px; font-weight: 700; }
+    section { margin-top: 26px; }
+    h2 { margin: 0 0 12px; font-size: 20px; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 12px; background: #171e2e; }
+    th, td { padding: 13px 16px; border-bottom: 1px solid #29334a; text-align: left; }
+    th { color: #9fb0c9; font-size: 13px; font-weight: 600; }
+    td { font-size: 16px; }
+    td.code, td.confidence { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    td.confidence { color: #8de1ba; font-weight: 700; }
+    .empty-row { color: #9fb0c9; text-align: center; }
+    @media (max-width: 700px) {
+      body { padding: 16px; }
+      header { align-items: flex-start; flex-direction: column; }
+      .camera-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .processing-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .latest-name { font-size: 38px; }
+      th, td { padding: 10px 8px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <h1>モーション判定モニター</h1>
+      <div id="status" class="status">接続確認中...</div>
+    </header>
+
+    <div class="safe">家電連携：無効　／　判定結果の表示のみ</div>
+
+    <section id="camera-panel" class="camera-panel" aria-live="polite">
+      <h2>カメラ接続</h2>
+      <div class="camera-summary">
+        <span class="camera-dot" aria-hidden="true"></span>
+        <span id="camera-state">状態取得中...</span>
+      </div>
+      <div class="camera-details">
+        <div class="camera-detail">
+          <div class="camera-detail-label">最終フレーム</div>
+          <div id="camera-last-frame" class="camera-detail-value">-</div>
+        </div>
+        <div class="camera-detail">
+          <div class="camera-detail-label">受信FPS</div>
+          <div id="camera-fps" class="camera-detail-value">-</div>
+        </div>
+        <div class="camera-detail">
+          <div class="camera-detail-label">再接続回数</div>
+          <div id="camera-reconnects" class="camera-detail-value">-</div>
+        </div>
+        <div class="camera-detail">
+          <div class="camera-detail-label">次回接続試行</div>
+          <div id="camera-retry" class="camera-detail-value">-</div>
+        </div>
+      </div>
+      <div id="camera-error" class="camera-error" hidden></div>
+    </section>
+
+    <section class="processing-panel">
+      <h2>処理状況</h2>
+      <div class="processing-details">
+        <div class="processing-detail">
+          <div class="processing-detail-label">処理出力FPS</div>
+          <div id="processing-output-fps" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">判定ループFPS</div>
+          <div id="processing-loop-fps" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">MediaPipe試行FPS</div>
+          <div id="processing-fps" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">出力フレーム</div>
+          <div id="processing-frames" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">欠落フレーム</div>
+          <div id="processing-dropped" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">処理率</div>
+          <div id="processing-ratio" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">判定ループ平均</div>
+          <div id="processing-loop-time" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">MediaPipe平均</div>
+          <div id="processing-time" class="processing-detail-value">-</div>
+        </div>
+        <div class="processing-detail">
+          <div class="processing-detail-label">最終判定</div>
+          <div id="processing-detection-age" class="processing-detail-value">-</div>
+        </div>
+      </div>
+      <div id="processing-warning" class="processing-warning" hidden></div>
+    </section>
+
+    <section class="landmark-panel">
+      <h2>MediaPipeランドマーク</h2>
+      <div class="landmark-stage">
+        <img id="landmark-overlay" alt="MediaPipeが検出したPoseとHandsのランドマーク" hidden>
+        <div id="landmark-empty" class="landmark-empty">ランドマーク画像を待っています...</div>
+      </div>
+      <div class="landmark-details">
+        <span id="landmark-pose">Pose: -</span>
+        <span id="landmark-hands">Hands: -</span>
+        <span id="landmark-captured">最終フレーム: -</span>
+      </div>
+    </section>
+
+    <section id="latest" class="latest empty">
+      <div>
+        <div class="latest-name">判定待ち</div>
+        <div class="latest-code">カメラの前でモーションを行ってください</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>直近の判定</h2>
+      <table>
+        <thead>
+          <tr><th>時刻</th><th>モーション</th><th>コード</th><th>信頼度</th></tr>
+        </thead>
+        <tbody id="history"><tr><td colspan="4" class="empty-row">まだ判定はありません</td></tr></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    const stateUrl = "/data/monitor_detections_live.json";
+    const statusElement = document.getElementById("status");
+    const cameraPanel = document.getElementById("camera-panel");
+    const cameraState = document.getElementById("camera-state");
+    const cameraLastFrame = document.getElementById("camera-last-frame");
+    const cameraFps = document.getElementById("camera-fps");
+    const cameraReconnects = document.getElementById("camera-reconnects");
+    const cameraRetry = document.getElementById("camera-retry");
+    const cameraError = document.getElementById("camera-error");
+    const processingOutputFps = document.getElementById("processing-output-fps");
+    const processingLoopFps = document.getElementById("processing-loop-fps");
+    const processingFps = document.getElementById("processing-fps");
+    const processingFrames = document.getElementById("processing-frames");
+    const processingDropped = document.getElementById("processing-dropped");
+    const processingRatio = document.getElementById("processing-ratio");
+    const processingLoopTime = document.getElementById("processing-loop-time");
+    const processingTime = document.getElementById("processing-time");
+    const processingDetectionAge = document.getElementById("processing-detection-age");
+    const processingWarning = document.getElementById("processing-warning");
+    const landmarkOverlay = document.getElementById("landmark-overlay");
+    const landmarkEmpty = document.getElementById("landmark-empty");
+    const landmarkPose = document.getElementById("landmark-pose");
+    const landmarkHands = document.getElementById("landmark-hands");
+    const landmarkCaptured = document.getElementById("landmark-captured");
+    const latestElement = document.getElementById("latest");
+    const historyElement = document.getElementById("history");
+
+    function time(value) {
+      return new Date(value).toLocaleTimeString("ja-JP", {hour12: false});
+    }
+
+    function ageSeconds(value) {
+      if (!value) return null;
+      const timestamp = Date.parse(value);
+      if (Number.isNaN(timestamp)) return null;
+      return Math.max(0, (Date.now() - timestamp) / 1000);
+    }
+
+    function ageText(seconds) {
+      if (seconds == null) return "-";
+      if (seconds < 1) return "たった今";
+      if (seconds < 60) return `${seconds.toFixed(1)}秒前`;
+      return `${Math.floor(seconds / 60)}分${Math.floor(seconds % 60)}秒前`;
+    }
+
+    const cameraStateLabels = {
+      CONNECTED: ["connected", "接続中"],
+      CONNECTING: ["connecting", "接続試行中"],
+      RECONNECTING: ["reconnecting", "再接続中"],
+      STALE: ["stale", "映像停止"],
+      STOPPED: ["stopped", "停止"],
+    };
+
+    function renderCamera(camera) {
+      if (!camera) {
+        cameraPanel.className = "camera-panel error";
+        cameraState.textContent = "状態未取得";
+        cameraLastFrame.textContent = "-";
+        cameraFps.textContent = "-";
+        cameraReconnects.textContent = "-";
+        cameraRetry.textContent = "-";
+        cameraError.hidden = true;
+        return;
+      }
+
+      const [className, label] = cameraStateLabels[camera.state] || ["error", "不明"];
+      cameraPanel.className = `camera-panel ${className}`;
+      cameraState.textContent = label;
+      cameraLastFrame.textContent = camera.last_frame_age_seconds == null
+        ? "未受信"
+        : `${camera.last_frame_age_seconds.toFixed(1)}秒前`;
+      cameraFps.textContent = `${Number(camera.receive_fps || 0).toFixed(1)} fps`;
+      cameraReconnects.textContent = `${camera.reconnect_count || 0}回`;
+      cameraRetry.textContent = camera.retry_in_seconds == null
+        ? "-"
+        : `${camera.retry_in_seconds.toFixed(1)}秒後`;
+      if (camera.last_error) {
+        cameraError.hidden = false;
+        cameraError.textContent = `原因: ${camera.last_error}`;
+      } else {
+        cameraError.hidden = true;
+        cameraError.textContent = "";
+      }
+    }
+
+    function renderLandmarks(landmarks) {
+      if (!landmarks) {
+        landmarkPose.textContent = "Pose: -";
+        landmarkHands.textContent = "Hands: -";
+        landmarkCaptured.textContent = "最終フレーム: -";
+        return;
+      }
+      landmarkPose.textContent = `Pose: ${landmarks.pose_points || 0} points`;
+      landmarkHands.textContent = `Hands: ${landmarks.hand_count || 0} (${landmarks.hand_points || 0} points)`;
+      landmarkCaptured.textContent = landmarks.captured_at
+        ? `最終フレーム: ${time(landmarks.captured_at)}`
+        : "最終フレーム: -";
+    }
+
+    function renderProcessing(processing, latest) {
+      if (!processing) {
+        processingOutputFps.textContent = "-";
+        processingLoopFps.textContent = "-";
+        processingFps.textContent = "-";
+        processingFrames.textContent = "-";
+        processingDropped.textContent = "-";
+        processingRatio.textContent = "-";
+        processingLoopTime.textContent = "-";
+        processingTime.textContent = "-";
+        processingDetectionAge.textContent = "-";
+        processingWarning.hidden = true;
+        return;
+      }
+      processingOutputFps.textContent = `${Number(processing.output_fps || 0).toFixed(1)} fps`;
+      processingLoopFps.textContent = `${Number(processing.loop_fps || 0).toFixed(1)} fps`;
+      processingFps.textContent = `${Number(processing.inference_fps || 0).toFixed(1)} fps`;
+      processingFrames.textContent = `${processing.frames_output || 0} 枚`;
+      processingDropped.textContent = `${processing.frames_dropped || 0} 枚`;
+      processingRatio.textContent = `${Number(processing.processing_ratio || 0).toFixed(1)}%`;
+      processingLoopTime.textContent = processing.average_loop_ms == null
+        ? "-"
+        : `${Number(processing.average_loop_ms).toFixed(1)} ms`;
+      processingTime.textContent = processing.average_inference_ms == null
+        ? "-"
+        : `${Number(processing.average_inference_ms).toFixed(1)} ms`;
+      const detectionAge = ageSeconds(latest && latest.captured_at);
+      processingDetectionAge.textContent = latest
+        ? ageText(detectionAge)
+        : "未判定";
+
+      const dropped = Number(processing.frames_dropped || 0);
+      const errors = Number(processing.inference_errors || 0);
+      if (dropped > 0 || errors > 0) {
+        const messages = [];
+        if (dropped > 0) messages.push(`欠落 ${dropped}フレーム`);
+        if (errors > 0) messages.push(`推論エラー ${errors}回`);
+        processingWarning.hidden = false;
+        processingWarning.textContent = `${messages.join(" / ")}。受信FPSと判定ループFPSを比較してください。`;
+      } else {
+        processingWarning.hidden = true;
+        processingWarning.textContent = "";
+      }
+    }
+
+    function render(state) {
+      statusElement.textContent = state.status === "running"
+        ? `判定中　最終更新 ${time(state.updated_at)}`
+        : `モニター停止中　最終更新 ${time(state.updated_at)}`;
+      renderCamera(state.camera);
+      renderLandmarks(state.landmarks);
+      renderProcessing(state.processing, state.latest);
+
+      const overlayUrl = `/data/monitor_landmarks.jpg?t=${Date.now()}`;
+      landmarkOverlay.onload = () => {
+        landmarkOverlay.hidden = false;
+        landmarkEmpty.hidden = true;
+      };
+      landmarkOverlay.onerror = () => {
+        landmarkOverlay.hidden = true;
+        landmarkEmpty.hidden = false;
+      };
+      landmarkOverlay.src = overlayUrl;
+
+      if (state.latest) {
+        const latest = state.latest;
+        const detectionAge = ageSeconds(latest.captured_at);
+        const isStale = detectionAge != null && detectionAge >= 3;
+        latestElement.className = isStale ? "latest stale" : "latest";
+        latestElement.innerHTML = `
+          <div>
+            <div class="latest-name"></div>
+            <div class="latest-code"></div>
+            <div class="latest-age"></div>
+            <div class="confidence"></div>
+          </div>`;
+        latestElement.querySelector(".latest-name").textContent = latest.name;
+        latestElement.querySelector(".latest-code").textContent = `${time(latest.captured_at)}　${latest.motion_code}`;
+        latestElement.querySelector(".latest-age").textContent = isStale
+          ? `過去の判定　${ageText(detectionAge)}`
+          : `判定から ${ageText(detectionAge)}`;
+        latestElement.querySelector(".confidence").textContent = `信頼度 ${(latest.confidence * 100).toFixed(0)}%`;
+      }
+
+      historyElement.replaceChildren();
+      if (!state.history || state.history.length === 0) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td colspan="4" class="empty-row">まだ判定はありません</td>';
+        historyElement.appendChild(row);
+        return;
+      }
+      for (const item of state.history) {
+        const row = document.createElement("tr");
+        row.innerHTML = '<td></td><td></td><td class="code"></td><td class="confidence"></td>';
+        row.children[0].textContent = time(item.captured_at);
+        row.children[1].textContent = item.name;
+        row.children[2].textContent = item.motion_code;
+        row.children[3].textContent = `${(item.confidence * 100).toFixed(0)}%`;
+        historyElement.appendChild(row);
+      }
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch(`${stateUrl}?t=${Date.now()}`, {cache: "no-store"});
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        render(await response.json());
+      } catch (error) {
+        statusElement.textContent = "判定モニターへ接続できません";
+        renderCamera(null);
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 500);
+  </script>
+</body>
+</html>

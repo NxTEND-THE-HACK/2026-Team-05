@@ -21,8 +21,14 @@ started for each camera.
 
 ```text
 CAMERA_ID=demo-camera-1
-CAMERA_SOURCE=http://192.168.50.21/stream
+CAMERA_SOURCE=http://192.168.10.106/stream
+# For a temporary local-camera test, set CAMERA_WEBCAM_INDEX=0 instead.
+CAMERA_WEBCAM_INDEX=
+CAMERA_WEBCAM_PROFILE=micon
+CAMERA_WEBCAM_FPS=15
+CAMERA_WEBCAM_JPEG_QUALITY=80
 GO_API_URL=http://192.168.50.11:8080/internal/detections
+DETECTION_MIN_CONFIDENCE=0.5
 ```
 
 See `.env.example` for the complete list of settings.
@@ -39,34 +45,227 @@ them on the demo machine or build them into the Docker image. Override
 
 ## Runtime architecture
 
-One worker process is started per camera. `CAMERA_SOURCE` must be an HTTP
-MJPEG URL, so an ESP32 camera and the Windows demo PC can use the same input
-path. The Windows PC should expose its webcam as an MJPEG stream; the worker
-does not store video.
+One worker process is started per camera. The default input is the HTTP MJPEG
+URL in `CAMERA_SOURCE`. For temporary local testing, set
+`CAMERA_WEBCAM_INDEX` to a Windows camera index; the explicit local-camera
+setting takes precedence over `CAMERA_SOURCE`. The worker does not store video.
+
+When `CAMERA_WEBCAM_PROFILE=micon`, local frames are center-cropped to 4:3,
+resized to 800x600, capped at 15 FPS, and encoded with OpenCV JPEG quality 80.
+The ESP32 quality value and OpenCV quality value are different scales, so this
+is a practical approximation of the firmware's quality 8 setting. The actual
+local receive FPS is reported by the monitor and state file. Override the
+local output rate or JPEG quality with `CAMERA_WEBCAM_FPS` and
+`CAMERA_WEBCAM_JPEG_QUALITY` when matching a measured device rate.
 
 ```text
 MJPEG URL -> latest-frame buffer -> MediaPipe Pose + Hands
-          -> fixed gesture rules -> POST /internal/detections
+          -> shoulder normalization -> EMA smoothing
+          -> 2-second sliding window -> DTW + k-NN
+          -> UNKNOWN / confirmation / cooldown
+          -> POST /internal/detections
 ```
 
-The provisional fixed motion codes are:
+Python recognition is camera-only. It does not open a microphone, receive
+sound events, or use audio to confirm motions.
 
-- `POSE_RIGHT_HAND_UP`: right wrist held above the right shoulder for 0.6 s
-- `MOTION_SWIPE_RIGHT`: right wrist moves right by 0.18 normalized coordinates
+The runtime uses the fixed set of 11 motion codes below. It does not accept
+user-defined motions or add new motion codes at runtime. The reference asset
+`models/motion_samples.json` contains five normalized landmark time series per
+motion; it contains no camera frames.
+
+The default temporal-recognition settings are:
+
+```text
+TARGET_FPS=15
+WINDOW_FRAMES=30
+INFERENCE_STRIDE_FRAMES=3
+EMA_ALPHA=0.4
+LANDMARK_VISIBILITY=0.5
+KNN_K=3
+CONFIRMATION_COUNT=2
+RECOGNITION_COOLDOWN_SECONDS=1
+RECOGNITION_RESET_GAP_SECONDS=1.5
+DETECTION_MIN_CONFIDENCE=0.5
+```
+
+Thresholds are stored per motion in the reference asset. A classification
+whose nearest selected-motion distance exceeds that threshold is treated as
+`UNKNOWN` and is not sent to the Go API. The settings are tunable through the
+environment; changing them does not change the `/internal/detections` API.
+
+The delivery guard uses `DETECTION_MIN_CONFIDENCE=0.5` by default. This value
+was calibrated with 20 samples for each of the six currently used motions
+(120 segmented samples total): every positive sample remained detectable and
+the replay produced no off-diagonal detections. The worker applies this guard
+before sending a detection event to the Go API.
+
+The legacy fixed-rule implementation remains available as a compatibility
+fallback and for the recording evaluator. Its motion-code catalogue is:
+
+- `POSE_RIGHT_HAND_UP`: Pose right wrist held at least 0.23 normalized units
+  above the right shoulder for 0.45 s
+- `POSE_LEFT_HAND_UP`: Pose left wrist held at least 0.23 normalized units
+  above the left shoulder for 0.45 s
+- `MOTION_SWIPE_RIGHT`: Pose right wrist moves from the chest toward the person's right
+  by 0.18 normalized camera coordinates within 1.50 s of the chest baseline.
+  The front-facing stream makes this a decrease in image X; HandLandmarker
+  output is not required.
+- `MOTION_SWIPE_LEFT`: Pose left wrist moves from the chest toward the person's left
+  by 0.18 normalized camera coordinates within 1.50 s of the chest baseline.
+  The front-facing stream makes this an increase in image X; HandLandmarker
+  output is not required.
 - `MOTION_FINGER_SNAP`: right-hand curled preparation to extended index and
-  partially extended thumb
+  partially extended thumb, with the thumb-middle contact ratio at release
+  no greater than 0.50, a matching thumb direction when Hand/Pose agree, and
+  a 1.50 s duplicate guard
+- `MOTION_THUMBS_UP_MOVE_UP`: right-hand thumbs-up pose followed by upward movement;
+  the thumb must be visibly above the wrist
+- `MOTION_THUMBS_DOWN_MOVE_DOWN`: right-hand thumbs-down pose followed by downward
+  movement. The pose is a short-lived gate; the event is rejected if an upward
+  thumb pose appears first or if the wrist has already moved too far below the
+  shoulder region
+- `MOTION_CLAP`: Pose left/right wrists move from apart to a close position,
+  normalized by shoulder width; both wrists must finish near the shoulder
+  center (within 0.30 shoulder widths); HandLandmarker output is not required
+- `MOTION_OPEN_TO_FIST_DOWN`: right hand changes from an open palm to a fist while
+  lowering. The event also requires a chest-region vertical trajectory, which
+  prevents a hand that is already near the waist from being mistaken for this motion
+- `MOTION_HAND_ROTATE_RIGHT`: both the right palm's wrist-to-middle-finger
+  axis and wrist-to-index-finger axis rotate clockwise relative to the right
+  forearm by at least 20 degrees from their baselines. The collected right-hand
+  recordings also constrain the 0.22–1.16 s timing, Pose-wrist path, vertical
+  displacement, raw palm axis, and ring-finger angle envelope; a second frame
+  confirms the direction before emitting. A 1.25 s duplicate cooldown and a
+  short hand-tracking gap (up to 0.40 s) are applied.
+- `MOTION_HAND_ROTATE_LEFT`: both the left palm's wrist-to-middle-finger
+  axis and wrist-to-index-finger axis rotate counter-clockwise relative to the
+  left forearm by at least 20 degrees from their baselines. The collected
+  left-hand recordings constrain the 0.70–3.10 s candidate window, cumulative
+  Pose-wrist path, raw middle-finger axis change, and index-finger angle range;
+  a 1.25 s duplicate cooldown and a short hand-tracking gap (up to 0.60 s) are
+  applied.
 
-The rules combine Pose and Hands detections. A static pose is latched after
-one event until the user returns to the release posture.
+The rules combine Pose and Hands detections. The thumb poses are only start
+states; holding a thumbs-up or thumbs-down pose by itself does not emit an
+event. Pose detections use a 0.75 s duplicate cooldown, and each motion is
+latched after one event until its release condition is observed.
+
+## Build reference templates
+
+To rebuild the checked-in normalized template asset from labeled landmark
+recordings, run this from the `recognition` directory:
+
+```bash
+PYTHONPATH=src python scripts/build_motion_templates.py \
+  --data-dir data \
+  --output models/motion_samples.json \
+  --samples-per-motion 10 \
+  --ema-alpha 0.4
+```
+
+The input files are expected to be JSONL landmark recordings with optional
+`segment_id` values. The builder deterministically selects five segments per
+motion and writes only the shoulder-normalized feature sequences. Use
+`--threshold MOTION_CODE=VALUE` to tune an individual UNKNOWN threshold from
+real-device replay results.
+
+## Evaluate collected recordings
+
+The existing landmark recordings can be replayed without a camera. Segmented
+files are evaluated one event at a time; unsegmented files are reported as
+exploratory counts rather than accuracy benchmarks.
+
+```bash
+PYTHONPATH=src python scripts/evaluate_recordings.py \
+  --output data/gesture_evaluation_20260806.json
+```
+
+The evaluator reports Pose/Hands coverage, detection counts, and whether each
+known segment produced exactly one detection. The runtime engine resets
+gesture state after a 1.5-second capture gap so omitted waiting frames do not
+join two recorded gestures while absorbing temporary recording gaps.
+
+To run the same recordings through every rule and inspect off-diagonal false
+positives, add `--cross-check`:
+
+```bash
+PYTHONPATH=src python scripts/evaluate_recordings.py \
+  --cross-check
+```
+
+The report's `cross_check.rules` section lists each rule's own positive count
+and false positives produced by the other recordings.
+
+For camera-only testing without appliance delivery, run the monitor below. It
+never calls the Go API and prints only detected motions:
+
+```bash
+PYTHONPATH=src python scripts/monitor_detections.py \
+  --camera-source http://10.0.1.107/stream
+```
+
+For a USB or built-in camera, use the local-camera compatibility profile:
+
+```powershell
+$env:CAMERA_WEBCAM_INDEX = "0"
+$env:CAMERA_WEBCAM_PROFILE = "micon"
+$env:PYTHONPATH = "src"
+python scripts/monitor_detections.py --webcam-index 0 --camera-profile micon
+```
+
+The monitor prints source, connection state, output size, target FPS, and
+measured receive FPS. Its state JSON also reports the completed recognition
+loop FPS, MediaPipe attempt FPS, successful landmark output FPS, processed/
+output frames, overwritten (dropped) frames, processing ratio, recognition-loop
+time, MediaPipe inference time, and the timestamp of the latest inference.
+Landmark overlay JPEG generation runs asynchronously at a maximum of 5 FPS;
+override it with `--overlay-fps`. The dashboard uses these values to
+distinguish camera input speed from actual recognition-loop throughput.
+
+The monitor dashboard also shows camera connection status. This status is
+kept inside the Python process and is not sent to the Go API. The status is
+based on actual MJPEG frame reception:
+
+- `CONNECTED`: frames are arriving
+- `CONNECTING`: the first connection is being attempted
+- `RECONNECTING`: the stream ended or failed and a retry is scheduled
+- `STALE`: no frame arrived within `CAMERA_STALE_AFTER_SECONDS`
+- `STOPPED`: the Python monitor or worker has stopped
+
+`CAMERA_STALE_AFTER_SECONDS` defaults to 3 seconds. The monitor equivalent can
+be overridden with `--stale-after-seconds 3`.
+
+The dashboard labels a detection older than three seconds as a past detection
+and shows its elapsed time. The latest detection is historical state; it is
+not a claim that the same motion is present in the current frame.
 
 ## Run locally
 
 ```bash
 CAMERA_ID=demo-camera-1 \
-CAMERA_SOURCE=http://192.168.50.21/stream \
+CAMERA_SOURCE=http://192.168.10.106/stream \
 GO_API_URL=http://192.168.50.11:8080/internal/detections \
 python -m gesture_recognition.main
 ```
+
+The normal worker startup enables only these seven motions: right-hand up,
+left-hand up, right swipe, left swipe, Good-up, Bad-down, and finger snap.
+Clap, open-to-fist-down, right rotation, and left rotation remain available
+for explicit monitor or test configurations but are disabled by default in the
+normal worker.
+
+To run the normal worker from a local camera without sending detection events
+to Go:
+
+```powershell
+$env:CAMERA_WEBCAM_INDEX = "0"
+$env:CAMERA_WEBCAM_PROFILE = "micon"
+python -m gesture_recognition.main --no-delivery
+```
+
+Landmark recording also accepts `--webcam-index 0 --camera-profile micon` in
+place of `--camera-source`.
 
 For two cameras, start two processes with different `CAMERA_ID` and
 `CAMERA_SOURCE` values. The worker keeps only the newest frame, reconnects

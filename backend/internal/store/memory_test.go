@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -68,6 +69,57 @@ func TestMemoryCreateBindingUpdatesExistingMotion(t *testing.T) {
 	}
 }
 
+func TestMemoryDeleteBinding(t *testing.T) {
+	repository := NewMemory(DefaultSeed(time.Now()))
+	binding, err := repository.CreateBinding(context.Background(), domain.CreateBindingInput{
+		MotionID: "motion-pose-right-hand-up", ActionID: "action-plug-a-on",
+	})
+	if err != nil {
+		t.Fatalf("CreateBinding() error = %v", err)
+	}
+
+	if err := repository.DeleteBinding(context.Background(), binding.ID); err != nil {
+		t.Fatalf("DeleteBinding() error = %v", err)
+	}
+	items, err := repository.ListBindings(context.Background())
+	if err != nil {
+		t.Fatalf("ListBindings() error = %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("bindings = %+v, want no bindings", items)
+	}
+	if err := repository.DeleteBinding(context.Background(), binding.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second DeleteBinding() error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestMemoryDeleteActionCascadesToBindings(t *testing.T) {
+	repository := NewMemory(DefaultSeed(time.Now()))
+	binding, err := repository.CreateBinding(context.Background(), domain.CreateBindingInput{
+		MotionID: "motion-pose-right-hand-up", ActionID: "action-plug-a-on",
+	})
+	if err != nil {
+		t.Fatalf("CreateBinding() error = %v", err)
+	}
+
+	if err := repository.DeleteAction(context.Background(), "action-plug-a-on"); err != nil {
+		t.Fatalf("DeleteAction() error = %v", err)
+	}
+	if _, err := repository.ActionByID(context.Background(), "action-plug-a-on"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("ActionByID() error = %v, want ErrNotFound", err)
+	}
+	bindings, err := repository.ListBindings(context.Background())
+	if err != nil {
+		t.Fatalf("ListBindings() error = %v", err)
+	}
+	if len(bindings) != 0 {
+		t.Fatalf("bindings = %+v, want binding %s deleted with its action", bindings, binding.ID)
+	}
+	if err := repository.DeleteAction(context.Background(), "action-plug-a-on"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second DeleteAction() error = %v, want ErrNotFound", err)
+	}
+}
+
 func TestMemoryMotionBindingAppliesAcrossCameras(t *testing.T) {
 	now := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
 	repository := NewMemory(DefaultSeed(now))
@@ -109,9 +161,17 @@ func TestMemorySeedContainsEveryRecognitionMotion(t *testing.T) {
 	}
 
 	want := map[string]bool{
-		"POSE_RIGHT_HAND_UP": false,
-		"MOTION_SWIPE_RIGHT": false,
-		"MOTION_FINGER_SNAP": false,
+		"POSE_RIGHT_HAND_UP":           false,
+		"POSE_LEFT_HAND_UP":            false,
+		"MOTION_SWIPE_RIGHT":           false,
+		"MOTION_SWIPE_LEFT":            false,
+		"MOTION_FINGER_SNAP":           false,
+		"MOTION_THUMBS_UP_MOVE_UP":     false,
+		"MOTION_THUMBS_DOWN_MOVE_DOWN": false,
+		"MOTION_CLAP":                  false,
+		"MOTION_OPEN_TO_FIST_DOWN":     false,
+		"MOTION_HAND_ROTATE_RIGHT":     false,
+		"MOTION_HAND_ROTATE_LEFT":      false,
 	}
 	for _, motion := range motions {
 		if _, ok := want[motion.Code]; ok {

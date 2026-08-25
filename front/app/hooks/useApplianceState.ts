@@ -1,0 +1,54 @@
+import { useQuery } from "@tanstack/react-query";
+import { request } from "~/services/backendApiClient";
+import { queryKeys } from "./queryKeys";
+
+export interface ApplianceState {
+  applianceId: string;
+  online: boolean;
+  value: boolean | null;
+  switchCode: string;
+  source: "tuya" | "dry-run" | "no-action" | string;
+  error?: string;
+  fetchedAt: string;
+  states?: ApplianceSwitchState[];
+}
+
+export interface ApplianceSwitchState {
+  switchCode: string;
+  online: boolean;
+  value: boolean | null;
+  source: "tuya" | "dry-run" | "error" | string;
+  error?: string;
+}
+
+export interface UseApplianceStateResult {
+  data: ApplianceState | undefined;
+  isLoading: boolean;
+  /** 最後にフェッチが完了した時刻 (ms epoch)。値が変わるたび invalidate / 再フェッチを検知できる。 */
+  dataUpdatedAt: number;
+}
+
+/**
+ * 単一 appliance の現在状態をバックエンド経由で取得する。
+ * refetchInterval で 30 秒ごとにポーリングし、Tuya 側や物理スイッチの変更を UI へ反映する。
+ * dry-run モードでは source="dry-run" + value=null が返る。
+ */
+export function useApplianceState(applianceId: string | undefined): UseApplianceStateResult {
+  const query = useQuery({
+    queryKey: queryKeys.applianceState(applianceId ?? "_"),
+    enabled: Boolean(applianceId),
+    refetchInterval: 30_000,
+    staleTime: 10_000,
+    queryFn: async () => {
+      const data = await request<ApplianceState>(
+        `/api/appliances/${encodeURIComponent(applianceId as string)}/state`,
+      );
+      return data;
+    },
+  });
+  return {
+    data: query.data,
+    isLoading: query.isLoading,
+    dataUpdatedAt: query.dataUpdatedAt,
+  };
+}

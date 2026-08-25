@@ -5,9 +5,9 @@
 | 対象 | フロントエンド開発者・バックエンド連携担当 |
 | プロダクト名 | Remo-Trace |
 | 実装ディレクトリ | `front/` |
-| 最終更新日 | 2026-08-06 |
+| 最終更新日 | 2026-08-21 |
 | 実装ブランチ | `feature/implement-ui-screens` |
-| 関連仕様 | `docs/backend-api-specification.md`, `docs/mvp-specification.md` |
+| 関連仕様 | `docs/backend-api-specification.md`, `docs/frontend-ir-api-specification.md`, `docs/mvp-specification.md` |
 
 ---
 
@@ -146,7 +146,7 @@ Proxmox VE 系管理画面を参考にした **ヘッダー全幅 + 左サイド
 
 - `GET /api/appliances` 一覧
 - 行クリックまたはリンクで `/devices/:id`
-- 簡易登録フォーム（名称・カテゴリ等）→ `POST /api/appliances`（実装に準拠）
+- 簡易登録フォーム（名称・カテゴリ・操作方式）→ `POST /api/appliances`（実装に準拠）
 - `BackToDashboard`
 
 ### 6.4 Device Detail（`/devices/:deviceId`）
@@ -155,9 +155,9 @@ Proxmox VE 系管理画面を参考にした **ヘッダー全幅 + 左サイド
 |---|---|
 | 基本情報 | 一覧から `deviceId` で検索した Appliance（単体 GET 未使用） |
 | 関連バインディング | 当該 appliance の action に紐づく bindings をテーブル表示 |
-| **Manual Control** | 当該 appliance の actions を一覧。ON/OFF/実行ボタン |
+| **Manual Control** | `controlProvider` に応じてTuya Switchまたは赤外線ボタンを表示 |
 
-#### Manual Control 詳細
+#### Tuya Manual Control 詳細
 
 - データ: `useActions(deviceId)` および appliance 絞り込み
 - 並び: `params.value === true`（ON 系）を優先、その後 OFF、名称ソート
@@ -169,6 +169,14 @@ Proxmox VE 系管理画面を参考にした **ヘッダー全幅 + 左サイド
 - ボタンラベル目安: `params.value === true` → ON 系、`false` → OFF 系、それ以外 → 実行
 
 未存在 ID: 一覧に該当なしのとき空状態 / Result 表示。
+
+#### ESP32赤外線 Manual Control
+
+- `controlProvider === "ESP32_IR"` の場合だけ表示
+- 登録済みActionをボタングリッドで表示し、既存execute APIで送信
+- `＋ ボタンを登録` からone-shot学習Modalを開く
+- 学習中は当該コントローラーの送信ボタンをdisabledにする
+- 詳細なAPI、型、状態遷移は `docs/frontend-ir-api-specification.md` を正とする
 
 ### 6.5 Bindings（`/bindings`）
 
@@ -296,9 +304,9 @@ front/app/
 |---|---|
 | `Camera` | id, name, streamUrl, location, isEnabled, createdAt |
 | `Motion` | id, code, name, description |
-| `Appliance` | id, name, category, createdAt |
-| `Action` | id, applianceId, name, providerType=`"TUYA"`, params |
-| `Action.params` | deviceId?, deviceIdEnv?, switchCode?, value: boolean |
+| `Appliance` | id, name, category, controlProvider, controllerId?, createdAt |
+| `Action` | `providerType` を判別キーにした `TuyaAction | IRAction` |
+| `Action.params` | TuyaパラメータまたはESP32_IRのcontrollerId/signal/repeat |
 | `MotionBinding` | id, cameraId?, motionId, actionId, isEnabled, createdAt |
 | `ActionLog` | status: `SUCCESS` \| `FAILED` \| `COOLING_DOWN` 他 |
 | `CreateBindingRequest` | cameraId?, motionId, actionId |
@@ -321,9 +329,17 @@ front/app/
 | GET | `/api/appliances` | Devices, Sidebar, Detail |
 | POST | `/api/appliances` | Devices 登録 |
 | GET | `/api/actions` | フォーム, Manual Control, join |
+| DELETE | `/api/actions/:id` | 登録済み赤外線ボタン削除 |
 | POST | `/api/actions/:id/execute` | Manual Control |
+| GET | `/api/appliances/:id/ir/health` | 赤外線コントローラー状態 |
+| POST | `/api/appliances/:id/ir/learn/start` | 赤外線学習開始 |
+| GET | `/api/appliances/:id/ir/learn/status` | 赤外線受信ポーリング |
+| POST | `/api/appliances/:id/ir/learn/confirm` | 受信信号をActionとして保存 |
+| POST | `/api/appliances/:id/ir/learn/stop` | 赤外線学習中止 |
+| POST | `/api/appliances/:id/ir/test` | 赤外線LEDテスト |
 | GET | `/api/bindings` | Bindings, Detail |
 | POST | `/api/bindings` | New Motion / バインディング作成 |
+| DELETE | `/api/bindings/:id` | Bindings / バインディング削除 |
 | GET | `/api/logs?limit=` | Dashboard, Logs |
 
 認証: 現行フロントは API キー/トークンを付与しない（バックエンドがローカル前提の場合に合わせる）。
@@ -334,11 +350,11 @@ front/app/
 
 | 項目 | フロントの扱い | 依存 |
 |---|---|---|
-| `DELETE /api/bindings/:id` | Del で warning のみ。削除しない | BE 実装待ち |
+| `DELETE /api/bindings/:id` | Del の確認後に削除APIを呼び出し、成功後に一覧を再取得 | — |
 | `GET /api/appliances/:id` | 一覧フィルタで代替 | BE 任意 |
 | ログ confidence / 詳細エラー | フィールドがあれば表示拡張可。現状は API 応答範囲 | BE |
 | カメラ死活の高精度表示 | 専用 API なし。既存フィールド頼み | BE / micon |
-| リアルタイム更新 | WebSocket/SSE なし。Query 再取得・health ポーリング | 将来 |
+| リアルタイム更新 | `/api/logs/stream` のSSEをログ表示中だけ購読。切断時は30秒間隔のQuery再取得で補完 | BE |
 | モーションマスタ新規作成 | UI は binding 作成が中心 | 仕様 |
 | camera 単位のアクション選択 | BE は motion→action 中心。cameraId は optional メタ | `backend-api-specification.md` §1 |
 | 仮デモ UI | 専用ルート・welcome・旧 mock は削除済み（`5a89fb4`） | — |

@@ -1,6 +1,6 @@
 # Backend
 
-ジェスチャー認識イベントを受け取り、モーションに紐付けられた家電アクションに従ってTuyaスマートプラグをオン・オフするGo APIです。フロントエンド向けの管理・ログAPIも同じサーバーから提供します。
+ジェスチャー認識イベントを受け取り、モーションに紐付けられた家電アクションを実行するGo APIです。Tuyaスマートプラグに加えて、ESP32赤外線コントローラーによる任意信号の学習・保存・送信に対応します。フロントエンド向けの管理・ログAPIも同じサーバーから提供します。
 
 ## 処理フロー
 
@@ -10,7 +10,7 @@ Python recognition worker
   -> event_id重複排除
   -> motion_codeで明示的に設定されたアクションを解決
   -> 紐付け単位のクールダウン
-  -> Tuya Cloud API
+  -> providerTypeに応じてTuya Cloud APIまたはESP32赤外線API
   -> action_logsへ結果を記録
 ```
 
@@ -29,7 +29,7 @@ set +a
 go run ./cmd/server
 ```
 
-`.env.example` は `TUYA_DRY_RUN=true` なので、認証情報や実機なしでAPI全体を確認できます。`.env` はアプリが自動では読み込まないため、上記のようにシェルへ読み込むか、コンテナの `--env-file` を使用してください。
+`.env.example` は `TUYA_DRY_RUN=true` なので、Tuyaの認証情報や実機なしで既存フローを確認できます。赤外線実機APIは `IR_CONTROLLER_URL` 設定後に利用できます。`.env` はアプリが自動では読み込まないため、上記のようにシェルへ読み込むか、コンテナの `--env-file` を使用してください。
 
 `DATABASE_URL` が空の場合はインメモリ保存になります。PostgreSQL URLを設定すると、起動時に `internal/store/migrations` のスキーマと初期データを適用します。
 
@@ -65,6 +65,23 @@ PLUG_C_ID=プラグCのDevice ID
 
 製品によって電源DPコードが `switch_1` などの場合があります。その場合はアクション作成時の `switchCode` をTuya API Explorerに表示されるコードへ変更してください。
 
+## ESP32赤外線コントローラー設定
+
+```dotenv
+IR_CONTROLLER_ID=main-ir
+IR_CONTROLLER_URL=http://192.168.1.50
+IR_CONTROLLER_API_KEY=変更済みAPIキー
+IR_REQUEST_TIMEOUT_MS=3000
+IR_LEARNING_TIMEOUT_SECONDS=30
+```
+
+`IR_CONTROLLER_URL` が空の場合もバックエンドは起動し、Tuya機能は利用できる。赤外線APIを呼び出すと `503 Service Unavailable` になる。URLを設定する場合はAPIキーが必須。
+
+任意赤外線の信号本体は `appliance_actions.params` に保存される。PostgreSQLを使用すればバックエンド再起動後も保持される。ESP32には動的信号送信用の `POST /api/send/signal` とone-shot学習APIが必要。詳細は次を参照する。
+
+- フロント担当向け: `docs/frontend-ir-api-specification.md`
+- ESP32担当向け: `docs/esp32-ir-http-contract.md`
+
 LINE Botは今回の認識経路では使用しないため、`LINE_SECRET` と `LINE_TOKEN` は不要です。
 
 ## カメラとアクションの扱い
@@ -73,7 +90,7 @@ LINE Botは今回の認識経路では使用しないため、`LINE_SECRET` と 
 
 初期データにはカメラ、認識サービス側に実装済みのモーション、プラグA〜Cのオン・オフアクションだけを登録します。モーションとアクションの紐付けは初期登録しません。紐付けがない認識JSONを受け取った場合はTuyaを呼ばず、`FAILED` ログを残します。
 
-紐付けはフロントまたは `POST /api/bindings` から明示的に設定します。同じモーションに紐付けられるアクションは1つで、再設定すると指定したアクションへ更新します。
+紐付けはフロントまたは `POST /api/bindings` から明示的に設定します。同じモーションに紐付けられるアクションは1つで、再設定すると指定したアクションへ更新します。不要になった紐付けは `DELETE /api/bindings/:id` で削除できます。
 
 ## 疎通確認
 
@@ -117,11 +134,20 @@ GO_API_URL=http://127.0.0.1:8080/internal/detections
 | `GET` | `/api/motions` | モーション一覧 |
 | `GET` / `POST` | `/api/appliances` | 家電一覧・追加 |
 | `GET` / `POST` | `/api/actions` | アクション一覧・追加 |
+| `DELETE` | `/api/actions/:id` | 登録済みアクション削除（関連する紐付けも削除） |
 | `POST` | `/api/actions/:id/execute` | 手動実行 |
+| `GET` | `/api/appliances/:id/ir/health` | 赤外線コントローラー状態 |
+| `POST` | `/api/appliances/:id/ir/learn/start` | one-shot学習開始 |
+| `GET` | `/api/appliances/:id/ir/learn/status` | 学習状態・受信結果 |
+| `POST` | `/api/appliances/:id/ir/learn/confirm` | 受信信号をActionとして保存 |
+| `POST` | `/api/appliances/:id/ir/learn/stop` | 学習中止 |
+| `POST` | `/api/appliances/:id/ir/test` | 赤外線LEDテスト |
 | `GET` / `POST` | `/api/bindings` | 紐付け一覧・作成または更新 |
+| `DELETE` | `/api/bindings/:id` | 紐付け削除 |
 | `GET` | `/api/logs?limit=100` | 操作ログ。最大500件 |
+| `GET` | `/api/logs/stream` | 操作ログのSSE通知 |
 
-リストAPIのレスポンスはフロントの既存型に合わせて `{ "cameras": [...] }` のような包み形式です。作成APIは作成したオブジェクトを直接返します。バックエンドでは `providerType: "TUYA"` を追加しているため、フロント側の `ActionProviderType` にもマージ時に `"TUYA"` を加えてください。
+リストAPIのレスポンスはフロントの既存型に合わせて `{ "cameras": [...] }` のような包み形式です。作成APIは作成したオブジェクトを直接返します。`Appliance.controlProvider` と `Action.providerType` は `"TUYA" | "ESP32_IR"`。既存のprovider未指定デバイス作成は後方互換のためTuyaとして扱います。
 
 ## テスト
 
@@ -129,4 +155,4 @@ GO_API_URL=http://127.0.0.1:8080/internal/detections
 go test ./...
 ```
 
-テストではTuya Cloudへ通信せず、イベント重複排除、クールダウン、JSON検証、未設定カメラから家電を推測しないこと、フロント向けレスポンス形式を確認します。
+テストでは外部機器へ通信せず、イベント重複排除、クールダウン、JSON検証、未設定カメラから家電を推測しないこと、赤外線HTTP契約、学習排他、学習結果のAction保存、フロント向けレスポンス形式を確認します。

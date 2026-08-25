@@ -1,0 +1,1074 @@
+{
+  "schema_version": 1,
+  "input": "data\\mediapipe_raw_20260819.jsonl",
+  "output_dir": "data\\landmark_segments_20260819",
+  "split_rule": {
+    "marker": "open palm with a forward-sized, centered hand",
+    "palm_area_threshold": 0.01,
+    "wrist_x_range": [
+      0.2,
+      0.8
+    ],
+    "wrist_y_range": [
+      0.25,
+      0.75
+    ],
+    "min_marker_frames": 5,
+    "merge_gap_frames": 2
+  },
+  "discarded_before_first_marker_frames": 484,
+  "discarded_marker_frames": 1025,
+  "discarded_after_last_marker_frames": 518,
+  "markers": [
+    {
+      "start_raw_line": 485,
+      "end_raw_line": 505,
+      "frames": 21
+    },
+    {
+      "start_raw_line": 585,
+      "end_raw_line": 604,
+      "frames": 20
+    },
+    {
+      "start_raw_line": 671,
+      "end_raw_line": 684,
+      "frames": 14
+    },
+    {
+      "start_raw_line": 747,
+      "end_raw_line": 762,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 823,
+      "end_raw_line": 842,
+      "frames": 20
+    },
+    {
+      "start_raw_line": 901,
+      "end_raw_line": 916,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 983,
+      "end_raw_line": 1002,
+      "frames": 20
+    },
+    {
+      "start_raw_line": 1070,
+      "end_raw_line": 1092,
+      "frames": 23
+    },
+    {
+      "start_raw_line": 1155,
+      "end_raw_line": 1168,
+      "frames": 14
+    },
+    {
+      "start_raw_line": 1235,
+      "end_raw_line": 1250,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 1312,
+      "end_raw_line": 1327,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 1387,
+      "end_raw_line": 1404,
+      "frames": 18
+    },
+    {
+      "start_raw_line": 1462,
+      "end_raw_line": 1477,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 1540,
+      "end_raw_line": 1552,
+      "frames": 13
+    },
+    {
+      "start_raw_line": 1611,
+      "end_raw_line": 1624,
+      "frames": 14
+    },
+    {
+      "start_raw_line": 1687,
+      "end_raw_line": 1702,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 1770,
+      "end_raw_line": 1782,
+      "frames": 13
+    },
+    {
+      "start_raw_line": 1841,
+      "end_raw_line": 1855,
+      "frames": 15
+    },
+    {
+      "start_raw_line": 1916,
+      "end_raw_line": 1928,
+      "frames": 13
+    },
+    {
+      "start_raw_line": 1984,
+      "end_raw_line": 1999,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 2058,
+      "end_raw_line": 2075,
+      "frames": 18
+    },
+    {
+      "start_raw_line": 2134,
+      "end_raw_line": 2145,
+      "frames": 12
+    },
+    {
+      "start_raw_line": 2208,
+      "end_raw_line": 2224,
+      "frames": 17
+    },
+    {
+      "start_raw_line": 2278,
+      "end_raw_line": 2292,
+      "frames": 15
+    },
+    {
+      "start_raw_line": 2348,
+      "end_raw_line": 2364,
+      "frames": 17
+    },
+    {
+      "start_raw_line": 2417,
+      "end_raw_line": 2438,
+      "frames": 22
+    },
+    {
+      "start_raw_line": 2490,
+      "end_raw_line": 2505,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 2565,
+      "end_raw_line": 2581,
+      "frames": 17
+    },
+    {
+      "start_raw_line": 2640,
+      "end_raw_line": 2657,
+      "frames": 18
+    },
+    {
+      "start_raw_line": 2711,
+      "end_raw_line": 2728,
+      "frames": 18
+    },
+    {
+      "start_raw_line": 2781,
+      "end_raw_line": 2799,
+      "frames": 19
+    },
+    {
+      "start_raw_line": 2851,
+      "end_raw_line": 2866,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 2921,
+      "end_raw_line": 2936,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 2995,
+      "end_raw_line": 3012,
+      "frames": 18
+    },
+    {
+      "start_raw_line": 3068,
+      "end_raw_line": 3081,
+      "frames": 14
+    },
+    {
+      "start_raw_line": 3140,
+      "end_raw_line": 3154,
+      "frames": 15
+    },
+    {
+      "start_raw_line": 3208,
+      "end_raw_line": 3224,
+      "frames": 17
+    },
+    {
+      "start_raw_line": 3276,
+      "end_raw_line": 3291,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 3342,
+      "end_raw_line": 3359,
+      "frames": 18
+    },
+    {
+      "start_raw_line": 3414,
+      "end_raw_line": 3431,
+      "frames": 18
+    },
+    {
+      "start_raw_line": 3491,
+      "end_raw_line": 3512,
+      "frames": 22
+    },
+    {
+      "start_raw_line": 3579,
+      "end_raw_line": 3593,
+      "frames": 15
+    },
+    {
+      "start_raw_line": 3645,
+      "end_raw_line": 3660,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 3717,
+      "end_raw_line": 3731,
+      "frames": 15
+    },
+    {
+      "start_raw_line": 3783,
+      "end_raw_line": 3798,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 3853,
+      "end_raw_line": 3870,
+      "frames": 18
+    },
+    {
+      "start_raw_line": 3934,
+      "end_raw_line": 3954,
+      "frames": 21
+    },
+    {
+      "start_raw_line": 4011,
+      "end_raw_line": 4024,
+      "frames": 14
+    },
+    {
+      "start_raw_line": 4086,
+      "end_raw_line": 4100,
+      "frames": 15
+    },
+    {
+      "start_raw_line": 4158,
+      "end_raw_line": 4173,
+      "frames": 16
+    },
+    {
+      "start_raw_line": 4230,
+      "end_raw_line": 4242,
+      "frames": 13
+    },
+    {
+      "start_raw_line": 4326,
+      "end_raw_line": 4342,
+      "frames": 17
+    },
+    {
+      "start_raw_line": 4399,
+      "end_raw_line": 4418,
+      "frames": 20
+    },
+    {
+      "start_raw_line": 4472,
+      "end_raw_line": 4486,
+      "frames": 15
+    },
+    {
+      "start_raw_line": 4544,
+      "end_raw_line": 4560,
+      "frames": 17
+    },
+    {
+      "start_raw_line": 4617,
+      "end_raw_line": 4636,
+      "frames": 20
+    },
+    {
+      "start_raw_line": 4687,
+      "end_raw_line": 4701,
+      "frames": 15
+    },
+    {
+      "start_raw_line": 4756,
+      "end_raw_line": 4775,
+      "frames": 20
+    },
+    {
+      "start_raw_line": 4828,
+      "end_raw_line": 4844,
+      "frames": 17
+    },
+    {
+      "start_raw_line": 4907,
+      "end_raw_line": 4925,
+      "frames": 19
+    },
+    {
+      "start_raw_line": 4986,
+      "end_raw_line": 5002,
+      "frames": 17
+    }
+  ],
+  "verification": {
+    "expected_segments": 60,
+    "marker_runs": 61,
+    "expected_marker_runs": 61,
+    "segments_created": 60,
+    "all_motion_counts_are_expected": true,
+    "counts": {
+      "POSE_RIGHT_HAND_UP": 10,
+      "POSE_LEFT_HAND_UP": 10,
+      "MOTION_SWIPE_RIGHT": 10,
+      "MOTION_SWIPE_LEFT": 10,
+      "MOTION_THUMBS_UP_MOVE_UP": 10,
+      "MOTION_THUMBS_DOWN_MOVE_DOWN": 10
+    },
+    "frame_counts": {
+      "POSE_RIGHT_HAND_UP": 647,
+      "POSE_LEFT_HAND_UP": 596,
+      "MOTION_SWIPE_RIGHT": 553,
+      "MOTION_SWIPE_LEFT": 543,
+      "MOTION_THUMBS_UP_MOVE_UP": 571,
+      "MOTION_THUMBS_DOWN_MOVE_DOWN": 583
+    }
+  },
+  "segments": [
+    {
+      "index": 1,
+      "code": "POSE_RIGHT_HAND_UP",
+      "name": "右手上げ",
+      "sample_number": 1,
+      "segment_id": "POSE_RIGHT_HAND_UP_01",
+      "start_raw_line": 506,
+      "end_raw_line": 584,
+      "frames": 79,
+      "duration_seconds": 3.029,
+      "file": "POSE_RIGHT_HAND_UP\\sample_01.jsonl"
+    },
+    {
+      "index": 2,
+      "code": "POSE_RIGHT_HAND_UP",
+      "name": "右手上げ",
+      "sample_number": 2,
+      "segment_id": "POSE_RIGHT_HAND_UP_02",
+      "start_raw_line": 605,
+      "end_raw_line": 670,
+      "frames": 66,
+      "duration_seconds": 2.858,
+      "file": "POSE_RIGHT_HAND_UP\\sample_02.jsonl"
+    },
+    {
+      "index": 3,
+      "code": "POSE_RIGHT_HAND_UP",
+      "name": "右手上げ",
+      "sample_number": 3,
+      "segment_id": "POSE_RIGHT_HAND_UP_03",
+      "start_raw_line": 685,
+      "end_raw_line": 746,
+      "frames": 62,
+      "duration_seconds": 2.632,
+      "file": "POSE_RIGHT_HAND_UP\\sample_03.jsonl"
+    },
+    {
+      "index": 4,
+      "code": "POSE_RIGHT_HAND_UP",
+      "name": "右手上げ",
+      "sample_number": 4,
+      "segment_id": "POSE_RIGHT_HAND_UP_04",
+      "start_raw_line": 763,
+      "end_raw_line": 822,
+      "frames": 60,
+      "duration_seconds": 2.663,
+      "file": "POSE_RIGHT_HAND_UP\\sample_04.jsonl"
+    },
+    {
+      "index": 5,
+      "code": "POSE_RIGHT_HAND_UP",
+      "name": "右手上げ",
+      "sample_number": 5,
+      "segment_id": "POSE_RIGHT_HAND_UP_05",
+      "start_raw_line": 843,
+      "end_raw_line": 900,
+      "frames": 58,
+      "duration_seconds": 2.549,
+      "file": "POSE_RIGHT_HAND_UP\\sample_05.jsonl"
+    },
+    {
+      "index": 6,
+      "code": "POSE_RIGHT_HAND_UP",
+      "name": "右手上げ",
+      "sample_number": 6,
+      "segment_id": "POSE_RIGHT_HAND_UP_06",
+      "start_raw_line": 917,
+      "end_raw_line": 982,
+      "frames": 66,
+      "duration_seconds": 2.776,
+      "file": "POSE_RIGHT_HAND_UP\\sample_06.jsonl"
+    },
+    {
+      "index": 7,
+      "code": "POSE_RIGHT_HAND_UP",
+      "name": "右手上げ",
+      "sample_number": 7,
+      "segment_id": "POSE_RIGHT_HAND_UP_07",
+      "start_raw_line": 1003,
+      "end_raw_line": 1069,
+      "frames": 67,
+      "duration_seconds": 2.7,
+      "file": "POSE_RIGHT_HAND_UP\\sample_07.jsonl"
+    },
+    {
+      "index": 8,
+      "code": "POSE_RIGHT_HAND_UP",
+      "name": "右手上げ",
+      "sample_number": 8,
+      "segment_id": "POSE_RIGHT_HAND_UP_08",
+      "start_raw_line": 1093,
+      "end_raw_line": 1154,
+      "frames": 62,
+      "duration_seconds": 2.715,
+      "file": "POSE_RIGHT_HAND_UP\\sample_08.jsonl"
+    },
+    {
+      "index": 9,
+      "code": "POSE_RIGHT_HAND_UP",
+      "name": "右手上げ",
+      "sample_number": 9,
+      "segment_id": "POSE_RIGHT_HAND_UP_09",
+      "start_raw_line": 1169,
+      "end_raw_line": 1234,
+      "frames": 66,
+      "duration_seconds": 2.662,
+      "file": "POSE_RIGHT_HAND_UP\\sample_09.jsonl"
+    },
+    {
+      "index": 10,
+      "code": "POSE_RIGHT_HAND_UP",
+      "name": "右手上げ",
+      "sample_number": 10,
+      "segment_id": "POSE_RIGHT_HAND_UP_10",
+      "start_raw_line": 1251,
+      "end_raw_line": 1311,
+      "frames": 61,
+      "duration_seconds": 2.696,
+      "file": "POSE_RIGHT_HAND_UP\\sample_10.jsonl"
+    },
+    {
+      "index": 11,
+      "code": "POSE_LEFT_HAND_UP",
+      "name": "左手上げ",
+      "sample_number": 1,
+      "segment_id": "POSE_LEFT_HAND_UP_01",
+      "start_raw_line": 1328,
+      "end_raw_line": 1386,
+      "frames": 59,
+      "duration_seconds": 2.662,
+      "file": "POSE_LEFT_HAND_UP\\sample_01.jsonl"
+    },
+    {
+      "index": 12,
+      "code": "POSE_LEFT_HAND_UP",
+      "name": "左手上げ",
+      "sample_number": 2,
+      "segment_id": "POSE_LEFT_HAND_UP_02",
+      "start_raw_line": 1405,
+      "end_raw_line": 1461,
+      "frames": 57,
+      "duration_seconds": 2.517,
+      "file": "POSE_LEFT_HAND_UP\\sample_02.jsonl"
+    },
+    {
+      "index": 13,
+      "code": "POSE_LEFT_HAND_UP",
+      "name": "左手上げ",
+      "sample_number": 3,
+      "segment_id": "POSE_LEFT_HAND_UP_03",
+      "start_raw_line": 1478,
+      "end_raw_line": 1539,
+      "frames": 62,
+      "duration_seconds": 2.634,
+      "file": "POSE_LEFT_HAND_UP\\sample_03.jsonl"
+    },
+    {
+      "index": 14,
+      "code": "POSE_LEFT_HAND_UP",
+      "name": "左手上げ",
+      "sample_number": 4,
+      "segment_id": "POSE_LEFT_HAND_UP_04",
+      "start_raw_line": 1553,
+      "end_raw_line": 1610,
+      "frames": 58,
+      "duration_seconds": 2.514,
+      "file": "POSE_LEFT_HAND_UP\\sample_04.jsonl"
+    },
+    {
+      "index": 15,
+      "code": "POSE_LEFT_HAND_UP",
+      "name": "左手上げ",
+      "sample_number": 5,
+      "segment_id": "POSE_LEFT_HAND_UP_05",
+      "start_raw_line": 1625,
+      "end_raw_line": 1686,
+      "frames": 62,
+      "duration_seconds": 2.726,
+      "file": "POSE_LEFT_HAND_UP\\sample_05.jsonl"
+    },
+    {
+      "index": 16,
+      "code": "POSE_LEFT_HAND_UP",
+      "name": "左手上げ",
+      "sample_number": 6,
+      "segment_id": "POSE_LEFT_HAND_UP_06",
+      "start_raw_line": 1703,
+      "end_raw_line": 1769,
+      "frames": 67,
+      "duration_seconds": 2.778,
+      "file": "POSE_LEFT_HAND_UP\\sample_06.jsonl"
+    },
+    {
+      "index": 17,
+      "code": "POSE_LEFT_HAND_UP",
+      "name": "左手上げ",
+      "sample_number": 7,
+      "segment_id": "POSE_LEFT_HAND_UP_07",
+      "start_raw_line": 1783,
+      "end_raw_line": 1840,
+      "frames": 58,
+      "duration_seconds": 2.635,
+      "file": "POSE_LEFT_HAND_UP\\sample_07.jsonl"
+    },
+    {
+      "index": 18,
+      "code": "POSE_LEFT_HAND_UP",
+      "name": "左手上げ",
+      "sample_number": 8,
+      "segment_id": "POSE_LEFT_HAND_UP_08",
+      "start_raw_line": 1856,
+      "end_raw_line": 1915,
+      "frames": 60,
+      "duration_seconds": 2.661,
+      "file": "POSE_LEFT_HAND_UP\\sample_08.jsonl"
+    },
+    {
+      "index": 19,
+      "code": "POSE_LEFT_HAND_UP",
+      "name": "左手上げ",
+      "sample_number": 9,
+      "segment_id": "POSE_LEFT_HAND_UP_09",
+      "start_raw_line": 1929,
+      "end_raw_line": 1983,
+      "frames": 55,
+      "duration_seconds": 2.559,
+      "file": "POSE_LEFT_HAND_UP\\sample_09.jsonl"
+    },
+    {
+      "index": 20,
+      "code": "POSE_LEFT_HAND_UP",
+      "name": "左手上げ",
+      "sample_number": 10,
+      "segment_id": "POSE_LEFT_HAND_UP_10",
+      "start_raw_line": 2000,
+      "end_raw_line": 2057,
+      "frames": 58,
+      "duration_seconds": 2.668,
+      "file": "POSE_LEFT_HAND_UP\\sample_10.jsonl"
+    },
+    {
+      "index": 21,
+      "code": "MOTION_SWIPE_RIGHT",
+      "name": "右スワイプ",
+      "sample_number": 1,
+      "segment_id": "MOTION_SWIPE_RIGHT_01",
+      "start_raw_line": 2076,
+      "end_raw_line": 2133,
+      "frames": 58,
+      "duration_seconds": 2.599,
+      "file": "MOTION_SWIPE_RIGHT\\sample_01.jsonl"
+    },
+    {
+      "index": 22,
+      "code": "MOTION_SWIPE_RIGHT",
+      "name": "右スワイプ",
+      "sample_number": 2,
+      "segment_id": "MOTION_SWIPE_RIGHT_02",
+      "start_raw_line": 2146,
+      "end_raw_line": 2207,
+      "frames": 62,
+      "duration_seconds": 2.63,
+      "file": "MOTION_SWIPE_RIGHT\\sample_02.jsonl"
+    },
+    {
+      "index": 23,
+      "code": "MOTION_SWIPE_RIGHT",
+      "name": "右スワイプ",
+      "sample_number": 3,
+      "segment_id": "MOTION_SWIPE_RIGHT_03",
+      "start_raw_line": 2225,
+      "end_raw_line": 2277,
+      "frames": 53,
+      "duration_seconds": 2.417,
+      "file": "MOTION_SWIPE_RIGHT\\sample_03.jsonl"
+    },
+    {
+      "index": 24,
+      "code": "MOTION_SWIPE_RIGHT",
+      "name": "右スワイプ",
+      "sample_number": 4,
+      "segment_id": "MOTION_SWIPE_RIGHT_04",
+      "start_raw_line": 2293,
+      "end_raw_line": 2347,
+      "frames": 55,
+      "duration_seconds": 2.485,
+      "file": "MOTION_SWIPE_RIGHT\\sample_04.jsonl"
+    },
+    {
+      "index": 25,
+      "code": "MOTION_SWIPE_RIGHT",
+      "name": "右スワイプ",
+      "sample_number": 5,
+      "segment_id": "MOTION_SWIPE_RIGHT_05",
+      "start_raw_line": 2365,
+      "end_raw_line": 2416,
+      "frames": 52,
+      "duration_seconds": 2.34,
+      "file": "MOTION_SWIPE_RIGHT\\sample_05.jsonl"
+    },
+    {
+      "index": 26,
+      "code": "MOTION_SWIPE_RIGHT",
+      "name": "右スワイプ",
+      "sample_number": 6,
+      "segment_id": "MOTION_SWIPE_RIGHT_06",
+      "start_raw_line": 2439,
+      "end_raw_line": 2489,
+      "frames": 51,
+      "duration_seconds": 2.341,
+      "file": "MOTION_SWIPE_RIGHT\\sample_06.jsonl"
+    },
+    {
+      "index": 27,
+      "code": "MOTION_SWIPE_RIGHT",
+      "name": "右スワイプ",
+      "sample_number": 7,
+      "segment_id": "MOTION_SWIPE_RIGHT_07",
+      "start_raw_line": 2506,
+      "end_raw_line": 2564,
+      "frames": 59,
+      "duration_seconds": 2.413,
+      "file": "MOTION_SWIPE_RIGHT\\sample_07.jsonl"
+    },
+    {
+      "index": 28,
+      "code": "MOTION_SWIPE_RIGHT",
+      "name": "右スワイプ",
+      "sample_number": 8,
+      "segment_id": "MOTION_SWIPE_RIGHT_08",
+      "start_raw_line": 2582,
+      "end_raw_line": 2639,
+      "frames": 58,
+      "duration_seconds": 2.488,
+      "file": "MOTION_SWIPE_RIGHT\\sample_08.jsonl"
+    },
+    {
+      "index": 29,
+      "code": "MOTION_SWIPE_RIGHT",
+      "name": "右スワイプ",
+      "sample_number": 9,
+      "segment_id": "MOTION_SWIPE_RIGHT_09",
+      "start_raw_line": 2658,
+      "end_raw_line": 2710,
+      "frames": 53,
+      "duration_seconds": 2.27,
+      "file": "MOTION_SWIPE_RIGHT\\sample_09.jsonl"
+    },
+    {
+      "index": 30,
+      "code": "MOTION_SWIPE_RIGHT",
+      "name": "右スワイプ",
+      "sample_number": 10,
+      "segment_id": "MOTION_SWIPE_RIGHT_10",
+      "start_raw_line": 2729,
+      "end_raw_line": 2780,
+      "frames": 52,
+      "duration_seconds": 2.34,
+      "file": "MOTION_SWIPE_RIGHT\\sample_10.jsonl"
+    },
+    {
+      "index": 31,
+      "code": "MOTION_SWIPE_LEFT",
+      "name": "左スワイプ",
+      "sample_number": 1,
+      "segment_id": "MOTION_SWIPE_LEFT_01",
+      "start_raw_line": 2800,
+      "end_raw_line": 2850,
+      "frames": 51,
+      "duration_seconds": 2.23,
+      "file": "MOTION_SWIPE_LEFT\\sample_01.jsonl"
+    },
+    {
+      "index": 32,
+      "code": "MOTION_SWIPE_LEFT",
+      "name": "左スワイプ",
+      "sample_number": 2,
+      "segment_id": "MOTION_SWIPE_LEFT_02",
+      "start_raw_line": 2867,
+      "end_raw_line": 2920,
+      "frames": 54,
+      "duration_seconds": 2.417,
+      "file": "MOTION_SWIPE_LEFT\\sample_02.jsonl"
+    },
+    {
+      "index": 33,
+      "code": "MOTION_SWIPE_LEFT",
+      "name": "左スワイプ",
+      "sample_number": 3,
+      "segment_id": "MOTION_SWIPE_LEFT_03",
+      "start_raw_line": 2937,
+      "end_raw_line": 2994,
+      "frames": 58,
+      "duration_seconds": 2.556,
+      "file": "MOTION_SWIPE_LEFT\\sample_03.jsonl"
+    },
+    {
+      "index": 34,
+      "code": "MOTION_SWIPE_LEFT",
+      "name": "左スワイプ",
+      "sample_number": 4,
+      "segment_id": "MOTION_SWIPE_LEFT_04",
+      "start_raw_line": 3013,
+      "end_raw_line": 3067,
+      "frames": 55,
+      "duration_seconds": 2.551,
+      "file": "MOTION_SWIPE_LEFT\\sample_04.jsonl"
+    },
+    {
+      "index": 35,
+      "code": "MOTION_SWIPE_LEFT",
+      "name": "左スワイプ",
+      "sample_number": 5,
+      "segment_id": "MOTION_SWIPE_LEFT_05",
+      "start_raw_line": 3082,
+      "end_raw_line": 3139,
+      "frames": 58,
+      "duration_seconds": 2.456,
+      "file": "MOTION_SWIPE_LEFT\\sample_05.jsonl"
+    },
+    {
+      "index": 36,
+      "code": "MOTION_SWIPE_LEFT",
+      "name": "左スワイプ",
+      "sample_number": 6,
+      "segment_id": "MOTION_SWIPE_LEFT_06",
+      "start_raw_line": 3155,
+      "end_raw_line": 3207,
+      "frames": 53,
+      "duration_seconds": 2.385,
+      "file": "MOTION_SWIPE_LEFT\\sample_06.jsonl"
+    },
+    {
+      "index": 37,
+      "code": "MOTION_SWIPE_LEFT",
+      "name": "左スワイプ",
+      "sample_number": 7,
+      "segment_id": "MOTION_SWIPE_LEFT_07",
+      "start_raw_line": 3225,
+      "end_raw_line": 3275,
+      "frames": 51,
+      "duration_seconds": 2.373,
+      "file": "MOTION_SWIPE_LEFT\\sample_07.jsonl"
+    },
+    {
+      "index": 38,
+      "code": "MOTION_SWIPE_LEFT",
+      "name": "左スワイプ",
+      "sample_number": 8,
+      "segment_id": "MOTION_SWIPE_LEFT_08",
+      "start_raw_line": 3292,
+      "end_raw_line": 3341,
+      "frames": 50,
+      "duration_seconds": 2.299,
+      "file": "MOTION_SWIPE_LEFT\\sample_08.jsonl"
+    },
+    {
+      "index": 39,
+      "code": "MOTION_SWIPE_LEFT",
+      "name": "左スワイプ",
+      "sample_number": 9,
+      "segment_id": "MOTION_SWIPE_LEFT_09",
+      "start_raw_line": 3360,
+      "end_raw_line": 3413,
+      "frames": 54,
+      "duration_seconds": 2.416,
+      "file": "MOTION_SWIPE_LEFT\\sample_09.jsonl"
+    },
+    {
+      "index": 40,
+      "code": "MOTION_SWIPE_LEFT",
+      "name": "左スワイプ",
+      "sample_number": 10,
+      "segment_id": "MOTION_SWIPE_LEFT_10",
+      "start_raw_line": 3432,
+      "end_raw_line": 3490,
+      "frames": 59,
+      "duration_seconds": 2.521,
+      "file": "MOTION_SWIPE_LEFT\\sample_10.jsonl"
+    },
+    {
+      "index": 41,
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "sample_number": 1,
+      "segment_id": "MOTION_THUMBS_UP_MOVE_UP_01",
+      "start_raw_line": 3513,
+      "end_raw_line": 3578,
+      "frames": 66,
+      "duration_seconds": 2.768,
+      "file": "MOTION_THUMBS_UP_MOVE_UP\\sample_01.jsonl"
+    },
+    {
+      "index": 42,
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "sample_number": 2,
+      "segment_id": "MOTION_THUMBS_UP_MOVE_UP_02",
+      "start_raw_line": 3594,
+      "end_raw_line": 3644,
+      "frames": 51,
+      "duration_seconds": 2.272,
+      "file": "MOTION_THUMBS_UP_MOVE_UP\\sample_02.jsonl"
+    },
+    {
+      "index": 43,
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "sample_number": 3,
+      "segment_id": "MOTION_THUMBS_UP_MOVE_UP_03",
+      "start_raw_line": 3661,
+      "end_raw_line": 3716,
+      "frames": 56,
+      "duration_seconds": 2.454,
+      "file": "MOTION_THUMBS_UP_MOVE_UP\\sample_03.jsonl"
+    },
+    {
+      "index": 44,
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "sample_number": 4,
+      "segment_id": "MOTION_THUMBS_UP_MOVE_UP_04",
+      "start_raw_line": 3732,
+      "end_raw_line": 3782,
+      "frames": 51,
+      "duration_seconds": 2.383,
+      "file": "MOTION_THUMBS_UP_MOVE_UP\\sample_04.jsonl"
+    },
+    {
+      "index": 45,
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "sample_number": 5,
+      "segment_id": "MOTION_THUMBS_UP_MOVE_UP_05",
+      "start_raw_line": 3799,
+      "end_raw_line": 3852,
+      "frames": 54,
+      "duration_seconds": 2.288,
+      "file": "MOTION_THUMBS_UP_MOVE_UP\\sample_05.jsonl"
+    },
+    {
+      "index": 46,
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "sample_number": 6,
+      "segment_id": "MOTION_THUMBS_UP_MOVE_UP_06",
+      "start_raw_line": 3871,
+      "end_raw_line": 3933,
+      "frames": 63,
+      "duration_seconds": 2.415,
+      "file": "MOTION_THUMBS_UP_MOVE_UP\\sample_06.jsonl"
+    },
+    {
+      "index": 47,
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "sample_number": 7,
+      "segment_id": "MOTION_THUMBS_UP_MOVE_UP_07",
+      "start_raw_line": 3955,
+      "end_raw_line": 4010,
+      "frames": 56,
+      "duration_seconds": 2.522,
+      "file": "MOTION_THUMBS_UP_MOVE_UP\\sample_07.jsonl"
+    },
+    {
+      "index": 48,
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "sample_number": 8,
+      "segment_id": "MOTION_THUMBS_UP_MOVE_UP_08",
+      "start_raw_line": 4025,
+      "end_raw_line": 4085,
+      "frames": 61,
+      "duration_seconds": 2.67,
+      "file": "MOTION_THUMBS_UP_MOVE_UP\\sample_08.jsonl"
+    },
+    {
+      "index": 49,
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "sample_number": 9,
+      "segment_id": "MOTION_THUMBS_UP_MOVE_UP_09",
+      "start_raw_line": 4101,
+      "end_raw_line": 4157,
+      "frames": 57,
+      "duration_seconds": 2.557,
+      "file": "MOTION_THUMBS_UP_MOVE_UP\\sample_09.jsonl"
+    },
+    {
+      "index": 50,
+      "code": "MOTION_THUMBS_UP_MOVE_UP",
+      "name": "Goodから上",
+      "sample_number": 10,
+      "segment_id": "MOTION_THUMBS_UP_MOVE_UP_10",
+      "start_raw_line": 4174,
+      "end_raw_line": 4229,
+      "frames": 56,
+      "duration_seconds": 2.456,
+      "file": "MOTION_THUMBS_UP_MOVE_UP\\sample_10.jsonl"
+    },
+    {
+      "index": 51,
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "sample_number": 1,
+      "segment_id": "MOTION_THUMBS_DOWN_MOVE_DOWN_01",
+      "start_raw_line": 4243,
+      "end_raw_line": 4325,
+      "frames": 83,
+      "duration_seconds": 3.46,
+      "file": "MOTION_THUMBS_DOWN_MOVE_DOWN\\sample_01.jsonl"
+    },
+    {
+      "index": 52,
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "sample_number": 2,
+      "segment_id": "MOTION_THUMBS_DOWN_MOVE_DOWN_02",
+      "start_raw_line": 4343,
+      "end_raw_line": 4398,
+      "frames": 56,
+      "duration_seconds": 2.422,
+      "file": "MOTION_THUMBS_DOWN_MOVE_DOWN\\sample_02.jsonl"
+    },
+    {
+      "index": 53,
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "sample_number": 3,
+      "segment_id": "MOTION_THUMBS_DOWN_MOVE_DOWN_03",
+      "start_raw_line": 4419,
+      "end_raw_line": 4471,
+      "frames": 53,
+      "duration_seconds": 2.302,
+      "file": "MOTION_THUMBS_DOWN_MOVE_DOWN\\sample_03.jsonl"
+    },
+    {
+      "index": 54,
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "sample_number": 4,
+      "segment_id": "MOTION_THUMBS_DOWN_MOVE_DOWN_04",
+      "start_raw_line": 4487,
+      "end_raw_line": 4543,
+      "frames": 57,
+      "duration_seconds": 2.483,
+      "file": "MOTION_THUMBS_DOWN_MOVE_DOWN\\sample_04.jsonl"
+    },
+    {
+      "index": 55,
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "sample_number": 5,
+      "segment_id": "MOTION_THUMBS_DOWN_MOVE_DOWN_05",
+      "start_raw_line": 4561,
+      "end_raw_line": 4616,
+      "frames": 56,
+      "duration_seconds": 2.417,
+      "file": "MOTION_THUMBS_DOWN_MOVE_DOWN\\sample_05.jsonl"
+    },
+    {
+      "index": 56,
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "sample_number": 6,
+      "segment_id": "MOTION_THUMBS_DOWN_MOVE_DOWN_06",
+      "start_raw_line": 4637,
+      "end_raw_line": 4686,
+      "frames": 50,
+      "duration_seconds": 2.134,
+      "file": "MOTION_THUMBS_DOWN_MOVE_DOWN\\sample_06.jsonl"
+    },
+    {
+      "index": 57,
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "sample_number": 7,
+      "segment_id": "MOTION_THUMBS_DOWN_MOVE_DOWN_07",
+      "start_raw_line": 4702,
+      "end_raw_line": 4755,
+      "frames": 54,
+      "duration_seconds": 2.489,
+      "file": "MOTION_THUMBS_DOWN_MOVE_DOWN\\sample_07.jsonl"
+    },
+    {
+      "index": 58,
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "sample_number": 8,
+      "segment_id": "MOTION_THUMBS_DOWN_MOVE_DOWN_08",
+      "start_raw_line": 4776,
+      "end_raw_line": 4827,
+      "frames": 52,
+      "duration_seconds": 2.371,
+      "file": "MOTION_THUMBS_DOWN_MOVE_DOWN\\sample_08.jsonl"
+    },
+    {
+      "index": 59,
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "sample_number": 9,
+      "segment_id": "MOTION_THUMBS_DOWN_MOVE_DOWN_09",
+      "start_raw_line": 4845,
+      "end_raw_line": 4906,
+      "frames": 62,
+      "duration_seconds": 2.49,
+      "file": "MOTION_THUMBS_DOWN_MOVE_DOWN\\sample_09.jsonl"
+    },
+    {
+      "index": 60,
+      "code": "MOTION_THUMBS_DOWN_MOVE_DOWN",
+      "name": "Badから下",
+      "sample_number": 10,
+      "segment_id": "MOTION_THUMBS_DOWN_MOVE_DOWN_10",
+      "start_raw_line": 4926,
+      "end_raw_line": 4985,
+      "frames": 60,
+      "duration_seconds": 2.448,
+      "file": "MOTION_THUMBS_DOWN_MOVE_DOWN\\sample_10.jsonl"
+    }
+  ]
+}

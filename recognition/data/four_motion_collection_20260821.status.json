@@ -1,0 +1,18 @@
+{
+  "state": "completed",
+  "phase": "completed",
+  "phase_text": "収集完了です。",
+  "motion_index": 4,
+  "motion_total": 4,
+  "motion_name": "左手首を左回転",
+  "sample_number": 10,
+  "samples_per_motion": 10,
+  "segment_index": 40,
+  "segments_total": 40,
+  "phase_remaining_seconds": 0.0,
+  "segment_records": 0,
+  "saved_records": 1496,
+  "output": "data\\four_motion_collection_20260821.jsonl",
+  "message": "全ポーズの収集が完了しました。",
+  "updated_at": "2026-08-21T19:55:32.205361+09:00"
+}

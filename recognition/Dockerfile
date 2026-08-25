@@ -11,6 +11,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY scripts ./scripts
+COPY models/motion_samples.json ./models/motion_samples.json
 
 RUN pip install --no-cache-dir .
 RUN python scripts/download_models.py --output-dir /app/models
